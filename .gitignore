@@ -1,0 +1,52 @@
+# Credenciales y configuración local
+.env
+.env.*
+!.env.example
+.envrc
+.direnv/
+
+# Entornos, paquetes y artefactos de Python
+.venv/
+venv/
+env/
+__pycache__/
+*.py[cod]
+.eggs/
+*.egg-info/
+build/
+dist/
+
+# Cachés de herramientas, pruebas y cobertura
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.pyre/
+.pytype/
+.tox/
+.nox/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+.cache/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Editores y sistema operativo
+.idea/
+.vscode/
+.DS_Store
+._*
+*.swp
+*.swo
+*~
+
+# Logs y ficheros temporales
+*.log
+*.tmp
+*.bak
+
+# Salidas reproducibles: se regeneran a partir de código y manifiestos
+experimentos/**/resultados/
+experimentos/**/artefactos/

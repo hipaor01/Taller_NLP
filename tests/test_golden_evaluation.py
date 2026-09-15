@@ -1,0 +1,317 @@
+from __future__ import annotations
+
+import tempfile
+import unittest
+from pathlib import Path
+
+from pydantic import ValidationError
+
+from taller_nlp import (
+    CasoGolden,
+    EvaluadorFinanciero,
+    LlamadaHerramienta,
+    RateLimitAgotadoError,
+    RespuestaAgente,
+)
+
+from tests.support import ANCLA_2024, TEXTO_2024, crear_corpus_temporal, escribir_jsonl
+
+
+def caso_extractivo() -> dict:
+    inicio = TEXTO_2024.index(ANCLA_2024)
+    return {
+        "id": "ext-001",
+        "pregunta": "¿Qué riesgo se describe?",
+        "familia": "extractiva",
+        "ticker": "ACME",
+        "fiscal_year": 2024,
+        "respuesta_esperada": "Las disrupciones podrían dañar las operaciones.",
+        "item_esperado": "1A",
+        "ancla_texto": ANCLA_2024,
+        "ancla_inicio": inicio,
+        "ancla_fin": inicio + len(ANCLA_2024),
+        "chunk_id_esperado": "ACME-2024-1A-0000",
+        "herramienta_esperada": ["search_filings"],
+        "autor": "equipo",
+    }
+
+
+def caso_numerico() -> dict:
+    return {
+        "id": "num-001",
+        "pregunta": "¿Cuál fue el beneficio neto?",
+        "familia": "numerica",
+        "ticker": "ACME",
+        "fiscal_year": 2024,
+        "respuesta_esperada": "100 USD",
+        "cifra_esperada": 100.0,
+        "unidad": "USD",
+        "concept_xbrl": "NetIncomeLoss",
+        "herramienta_esperada": ["get_xbrl_fact"],
+        "autor": "equipo",
+    }
+
+
+class TestCasoGolden(unittest.TestCase):
+    def test_carga_jsonl_con_nombre_arbitrario_y_valida_offsets(self) -> None:
+        with tempfile.TemporaryDirectory() as temporal:
+            raiz = Path(temporal)
+            corpus, _ = crear_corpus_temporal(raiz / "corpus")
+            ruta = raiz / "preguntas_ciegas_17.jsonl"
+            escribir_jsonl(ruta, [caso_extractivo(), caso_numerico()])
+            casos = CasoGolden.cargar_jsonl(ruta, corpus, numero_esperado=2)
+            self.assertEqual([caso.id for caso in casos], ["ext-001", "num-001"])
+
+    def test_rechaza_ancla_larga_y_offsets_incoherentes(self) -> None:
+        largo = caso_extractivo()
+        largo["ancla_texto"] = " ".join(["palabra"] * 41)
+        largo["ancla_fin"] = largo["ancla_inicio"] + len(largo["ancla_texto"])
+        with self.assertRaisesRegex(ValidationError, "máximo es 40"):
+            CasoGolden.model_validate(largo)
+
+        incoherente = caso_extractivo()
+        incoherente["ancla_fin"] += 1
+        with self.assertRaisesRegex(ValidationError, "longitud del ancla"):
+            CasoGolden.model_validate(incoherente)
+
+    def test_informa_ids_repetidos_y_minimo_de_comparativas(self) -> None:
+        import pandas as pd
+
+        problemas = CasoGolden.validar_registros(
+            [caso_numerico(), caso_numerico()],
+            secciones=pd.DataFrame(
+                [{"ticker": "ACME", "fiscal_year": 2024, "item": "1A", "texto": TEXTO_2024}]
+            ),
+            xbrl=pd.DataFrame(
+                [{"ticker": "ACME", "fiscal_year": 2024, "concept": "NetIncomeLoss"}]
+            ),
+            minimo_comparativas=1,
+        )
+        self.assertTrue(any("id repetido" in p for p in problemas))
+        self.assertTrue(any("hacen falta 1 comparativas" in p for p in problemas))
+
+
+class TestEvaluadorFinanciero(unittest.TestCase):
+    def test_evalua_cifra_cita_trayectoria_recall_y_agregados(self) -> None:
+        with tempfile.TemporaryDirectory() as temporal:
+            raiz = Path(temporal)
+            corpus, _ = crear_corpus_temporal(raiz / "corpus")
+            ruta = raiz / "evaluacion.jsonl"
+            escribir_jsonl(ruta, [caso_extractivo(), caso_numerico()])
+            juez_llamadas: list[tuple[str, tuple[str, ...]]] = []
+
+            def juez(respuesta, evidencias):
+                juez_llamadas.append((respuesta, evidencias))
+                return True
+
+            evaluador = EvaluadorFinanciero(
+                corpus,
+                juez,
+                k_retrieval=1,
+                tolerancia_absoluta=0.1,
+                tolerancia_relativa=0,
+                numero_esperado=2,
+            )
+
+            def responder(pregunta: str) -> RespuestaAgente:
+                if "riesgo" in pregunta:
+                    llamada = LlamadaHerramienta(
+                        id="call-search",
+                        nombre="search_filings",
+                        argumentos={
+                            "query": "risk",
+                            "ticker": "ACME",
+                            "fiscal_year": 2024,
+                            "item": "1A",
+                            "k": 1,
+                        },
+                        duracion_ms=2,
+                        chunk_ids=("ACME-2024-1A-0000",),
+                        resultado=TEXTO_2024,
+                    )
+                    return RespuestaAgente(
+                        respuesta="Las disrupciones pueden dañar las operaciones.",
+                        fuente="texto",
+                        citas=("ACME-2024-1A-0000",),
+                        llamadas=(llamada,),
+                        latencia_ms=10,
+                        coste_usd=0.01,
+                    )
+                llamada = LlamadaHerramienta(
+                    id="call-xbrl",
+                    nombre="get_xbrl_fact",
+                    argumentos={
+                        "ticker": "ACME",
+                        "fiscal_year": 2024,
+                        "concept": "NetIncomeLoss",
+                    },
+                    duracion_ms=1,
+                    resultado="100 USD",
+                )
+                return RespuestaAgente(
+                    respuesta="El beneficio fue 100 USD.",
+                    cifra=100.05,
+                    unidad="usd",
+                    fuente="xbrl",
+                    llamadas=(llamada,),
+                    latencia_ms=30,
+                    coste_usd=0.03,
+                )
+
+            informe = evaluador.evaluar(
+                nombre_agente="equipo-a", responder=responder, ruta_jsonl=ruta
+            )
+            self.assertEqual(informe.aciertos_totales, 2)
+            self.assertEqual(informe.recall_at_k_medio, 1)
+            self.assertEqual(informe.latencia_media_ms, 20)
+            self.assertEqual(informe.coste_medio_usd, 0.02)
+            self.assertEqual(informe.llamadas_por_pregunta, 1)
+            self.assertEqual(len(juez_llamadas), 1)
+
+    def test_una_llamada_con_concept_incorrecto_no_cumple_trayectoria(self) -> None:
+        with tempfile.TemporaryDirectory() as temporal:
+            raiz = Path(temporal)
+            corpus, _ = crear_corpus_temporal(raiz / "corpus")
+            ruta = raiz / "numerico.jsonl"
+            escribir_jsonl(ruta, [caso_numerico()])
+            evaluador = EvaluadorFinanciero(corpus, lambda *_: True)
+            llamada = LlamadaHerramienta(
+                id="mal",
+                nombre="get_xbrl_fact",
+                argumentos={
+                    "ticker": "ACME",
+                    "fiscal_year": 2024,
+                    "concept": "Revenues",
+                },
+                duracion_ms=0,
+                resultado="100 USD",
+            )
+            informe = evaluador.evaluar(
+                nombre_agente="a",
+                ruta_jsonl=ruta,
+                responder=lambda _: RespuestaAgente(
+                    respuesta="100 USD",
+                    cifra=100,
+                    unidad="USD",
+                    fuente="xbrl",
+                    llamadas=(llamada,),
+                    latencia_ms=0,
+                ),
+            )
+            self.assertFalse(informe.resultados[0].trayectoria_correcta)
+            self.assertFalse(informe.resultados[0].acierto)
+
+    def test_persiste_cada_caso_y_reanuda_solo_los_pendientes(self) -> None:
+        with tempfile.TemporaryDirectory() as temporal:
+            raiz = Path(temporal)
+            corpus, _ = crear_corpus_temporal(raiz / "corpus")
+            ruta_golden = raiz / "golden.jsonl"
+            ruta_progreso = raiz / "progreso" / "parcial.json"
+            primero = caso_numerico()
+            segundo = caso_numerico()
+            segundo.update(
+                {
+                    "id": "num-002",
+                    "pregunta": "¿Cuál fue el beneficio neto de 2023?",
+                    "fiscal_year": 2023,
+                    "cifra_esperada": 80.0,
+                    "respuesta_esperada": "80 USD",
+                }
+            )
+            escribir_jsonl(ruta_golden, [primero, segundo])
+
+            llamadas_primera: list[str] = []
+
+            def responder_interrumpiendo(pregunta: str) -> RespuestaAgente:
+                llamadas_primera.append(pregunta)
+                if "2023" in pregunta:
+                    raise KeyboardInterrupt
+                return self._respuesta_numerica(2024, 100)
+
+            evaluador = EvaluadorFinanciero(
+                corpus, lambda *_: True, ruta_progreso=ruta_progreso
+            )
+            with self.assertRaises(KeyboardInterrupt):
+                evaluador.evaluar(
+                    nombre_agente="agente-v1",
+                    responder=responder_interrumpiendo,
+                    ruta_jsonl=ruta_golden,
+                )
+            self.assertTrue(ruta_progreso.is_file())
+
+            llamadas_segunda: list[str] = []
+
+            def responder_reanudando(pregunta: str) -> RespuestaAgente:
+                llamadas_segunda.append(pregunta)
+                return self._respuesta_numerica(2023, 80)
+
+            informe = EvaluadorFinanciero(
+                corpus, lambda *_: True, ruta_progreso=ruta_progreso
+            ).evaluar(
+                nombre_agente="agente-v1",
+                responder=responder_reanudando,
+                ruta_jsonl=ruta_golden,
+            )
+            self.assertEqual(len(llamadas_primera), 2)
+            self.assertEqual(llamadas_segunda, [segundo["pregunta"]])
+            self.assertEqual(informe.aciertos_totales, 2)
+
+    def test_un_429_no_se_persiste_como_resultado_definitivo(self) -> None:
+        with tempfile.TemporaryDirectory() as temporal:
+            raiz = Path(temporal)
+            corpus, _ = crear_corpus_temporal(raiz / "corpus")
+            ruta_golden = raiz / "golden.jsonl"
+            ruta_progreso = raiz / "progreso.json"
+            escribir_jsonl(ruta_golden, [caso_numerico()])
+            evaluador = EvaluadorFinanciero(
+                corpus, lambda *_: True, ruta_progreso=ruta_progreso
+            )
+
+            with self.assertRaises(RateLimitAgotadoError):
+                evaluador.evaluar(
+                    nombre_agente="agente-v1",
+                    ruta_jsonl=ruta_golden,
+                    responder=lambda _: RespuestaAgente(
+                        respuesta="",
+                        fuente="ninguna",
+                        latencia_ms=1,
+                        error=(
+                            "TooManyRequestsResponseError: Rate limit exceeded"
+                        ),
+                    ),
+                )
+            self.assertFalse(ruta_progreso.exists())
+
+            informe = evaluador.evaluar(
+                nombre_agente="agente-v1",
+                ruta_jsonl=ruta_golden,
+                responder=lambda _: self._respuesta_numerica(2024, 100),
+            )
+            self.assertEqual(informe.aciertos_totales, 1)
+            self.assertTrue(ruta_progreso.is_file())
+
+    @staticmethod
+    def _respuesta_numerica(anio: int, cifra: float) -> RespuestaAgente:
+        llamada = LlamadaHerramienta(
+            id=f"xbrl-{anio}",
+            nombre="get_xbrl_fact",
+            argumentos={
+                "ticker": "ACME",
+                "fiscal_year": anio,
+                "concept": "NetIncomeLoss",
+            },
+            duracion_ms=0,
+            resultado=f"{cifra} USD",
+        )
+        return RespuestaAgente(
+            respuesta=f"El beneficio fue {cifra} USD.",
+            cifra=cifra,
+            unidad="USD",
+            fuente="xbrl",
+            llamadas=(llamada,),
+            latencia_ms=1,
+        )
+
+
+if __name__ == "__main__":
+    unittest.main()
