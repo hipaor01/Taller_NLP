@@ -23,8 +23,12 @@ from .evaluation_progress import (
 )
 from .hashing import calcular_sha256
 from .model_resilience import (
+    ErrorProveedorAgotadoError,
     RateLimitAgotadoError,
     es_error_rate_limit,
+    es_error_transitorio_modelo,
+    formatear_excepcion_modelo,
+    texto_indica_error_transitorio,
     texto_indica_rate_limit,
 )
 
@@ -126,6 +130,20 @@ class EvaluadorFinanciero:
             anteriores = almacen.preparar(
                 self._crear_contexto_progreso(nombre_agente, ruta_jsonl, casos)
             )
+            no_definitivos = {
+                id_pregunta
+                for id_pregunta, resultado in anteriores.items()
+                if texto_indica_error_transitorio(
+                    resultado.respuesta_agente.error
+                )
+            }
+            if no_definitivos:
+                almacen.descartar(no_definitivos)
+                anteriores = {
+                    id_pregunta: resultado
+                    for id_pregunta, resultado in anteriores.items()
+                    if id_pregunta not in no_definitivos
+                }
 
         resultados = []
         for caso in casos:
@@ -135,9 +153,15 @@ class EvaluadorFinanciero:
                 continue
 
             respuesta = self._responder_seguro(responder, caso)
-            if texto_indica_rate_limit(respuesta.error):
-                raise RateLimitAgotadoError(
-                    f"La evaluación se detuvo en {caso.id} por HTTP 429. "
+            if texto_indica_error_transitorio(respuesta.error):
+                tipo_error = (
+                    RateLimitAgotadoError
+                    if texto_indica_rate_limit(respuesta.error)
+                    else ErrorProveedorAgotadoError
+                )
+                raise tipo_error(
+                    f"La evaluación se detuvo en {caso.id} por un error "
+                    "transitorio del modelo. "
                     "Los casos anteriores permanecen guardados."
                 )
             resultado = self._evaluar_caso(caso, respuesta)
@@ -162,15 +186,20 @@ class EvaluadorFinanciero:
         try:
             respuesta = responder(caso.pregunta)
         except Exception as exc:
-            if es_error_rate_limit(exc):
-                raise RateLimitAgotadoError(
-                    f"Rate limit al responder {caso.id}."
+            if es_error_transitorio_modelo(exc):
+                tipo_error = (
+                    RateLimitAgotadoError
+                    if es_error_rate_limit(exc)
+                    else ErrorProveedorAgotadoError
+                )
+                raise tipo_error(
+                    f"Error transitorio al responder {caso.id}."
                 ) from exc
             return RespuestaAgente(
                 respuesta="",
                 fuente="ninguna",
                 latencia_ms=0,
-                error=f"{type(exc).__name__}: {exc}",
+                error=formatear_excepcion_modelo(exc),
             )
         if not isinstance(respuesta, RespuestaAgente):
             return RespuestaAgente(
@@ -243,11 +272,16 @@ class EvaluadorFinanciero:
                 self._juez_citas(respuesta.respuesta, evidencias)
             )
         except Exception as exc:
-            if es_error_rate_limit(exc):
-                raise RateLimitAgotadoError(
-                    f"Rate limit al juzgar las citas de {caso.id}."
+            if es_error_transitorio_modelo(exc):
+                tipo_error = (
+                    RateLimitAgotadoError
+                    if es_error_rate_limit(exc)
+                    else ErrorProveedorAgotadoError
+                )
+                raise tipo_error(
+                    f"Error transitorio al juzgar las citas de {caso.id}."
                 ) from exc
-            return True, False, f"{type(exc).__name__}: {exc}"
+            return True, False, formatear_excepcion_modelo(exc)
         return True, respaldo_semantico, None
 
     def _cifra_correcta(

@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 import random
+import json
 import time
 from collections.abc import Callable, Mapping
 from types import MappingProxyType
 from typing import Any, TypeVar
 
 from langchain.agents.middleware import AgentMiddleware
+from langchain.agents.middleware.types import ModelRequest
+from langchain_core.messages import AIMessage
 from langchain_core.rate_limiters import BaseRateLimiter, InMemoryRateLimiter
 
 from .config import ConfiguracionAgente
@@ -17,8 +20,16 @@ from .config import ConfiguracionAgente
 T = TypeVar("T")
 
 
-class RateLimitAgotadoError(RuntimeError):
+class ErrorTransitorioModeloAgotado(RuntimeError):
+    """Base para fallos temporales agotados que no deben puntuar como respuesta."""
+
+
+class RateLimitAgotadoError(ErrorTransitorioModeloAgotado):
     """Se agotaron los reintentos de una petición limitada por el proveedor."""
+
+
+class ErrorProveedorAgotadoError(ErrorTransitorioModeloAgotado):
+    """Se agotaron los reintentos de un error genérico del proveedor."""
 
 
 def es_error_rate_limit(error: BaseException) -> bool:
@@ -40,6 +51,26 @@ def es_error_rate_limit(error: BaseException) -> bool:
     return False
 
 
+def es_error_generico_proveedor(error: BaseException) -> bool:
+    """Distingue el 400 opaco del proveedor de otros bad requests del usuario."""
+    visitados: set[int] = set()
+    actual: BaseException | None = error
+    while actual is not None and id(actual) not in visitados:
+        visitados.add(id(actual))
+        if (
+            type(actual).__name__ == "BadRequestResponseError"
+            and str(actual).strip().casefold() == "provider returned error"
+        ):
+            return True
+        actual = actual.__cause__ or actual.__context__
+    return False
+
+
+def es_error_transitorio_modelo(error: BaseException) -> bool:
+    """Indica si un error permite reintento sin cambiar la petición funcional."""
+    return es_error_rate_limit(error) or es_error_generico_proveedor(error)
+
+
 def texto_indica_rate_limit(texto: str | None) -> bool:
     """Detecta la normalización textual que realiza la fachada pública."""
     if not texto:
@@ -57,8 +88,60 @@ def texto_indica_rate_limit(texto: str | None) -> bool:
     )
 
 
+def texto_indica_error_transitorio(texto: str | None) -> bool:
+    """Reconoce errores temporales después de serializarlos en RespuestaAgente."""
+    if texto_indica_rate_limit(texto):
+        return True
+    if not texto:
+        return False
+    normalizado = texto.casefold()
+    return (
+        "errorproveedoragotadoerror" in normalizado
+        or (
+            "badrequestresponseerror" in normalizado
+            and "provider returned error" in normalizado
+        )
+    )
+
+
+def formatear_excepcion_modelo(error: BaseException) -> str:
+    """Añade el mensaje upstream sin volcar peticiones ni metadatos completos."""
+    base = f"{type(error).__name__}: {error}"
+    actual: BaseException | None = error
+    visitados: set[int] = set()
+    while actual is not None and id(actual) not in visitados:
+        visitados.add(id(actual))
+        dato = getattr(actual, "data", None)
+        dato_error = getattr(dato, "error", None)
+        metadatos = getattr(dato_error, "metadata", None)
+        if isinstance(metadatos, dict):
+            proveedor = metadatos.get("provider_name")
+            detalle = _extraer_mensaje_seguro(metadatos.get("raw"))
+            partes = [str(p) for p in (proveedor, detalle) if p]
+            if partes:
+                return f"{base} ({': '.join(partes)})"
+        actual = actual.__cause__ or actual.__context__
+    return base
+
+
+def _extraer_mensaje_seguro(valor: Any) -> str | None:
+    if isinstance(valor, str):
+        try:
+            return _extraer_mensaje_seguro(json.loads(valor))
+        except json.JSONDecodeError:
+            return None
+    if isinstance(valor, dict):
+        mensaje = valor.get("message")
+        if isinstance(mensaje, str) and mensaje.strip():
+            return mensaje.strip()[:500]
+        error = valor.get("error")
+        if error is not None:
+            return _extraer_mensaje_seguro(error)
+    return None
+
+
 class ControlPeticionesModelo:
-    """Combina un token bucket compartido con backoff selectivo para 429."""
+    """Token bucket compartido y backoff para 429 y 400 genérico upstream."""
 
     def __init__(
         self,
@@ -135,17 +218,22 @@ class ControlPeticionesModelo:
         return MappingProxyType(dict(self._parametros))
 
     def ejecutar(self, operacion: Callable[[], T]) -> T:
-        """Reintenta solo respuestas 429; otros errores se propagan intactos."""
+        """Reintenta fallos transitorios; los demás se propagan intactos."""
         for numero_reintento in range(self._max_reintentos + 1):
             try:
                 return operacion()
             except Exception as exc:
-                if not es_error_rate_limit(exc):
+                if not es_error_transitorio_modelo(exc):
                     raise
                 if numero_reintento == self._max_reintentos:
-                    raise RateLimitAgotadoError(
-                        "OpenRouter siguió devolviendo HTTP 429 tras "
-                        f"{self._max_reintentos} reintentos."
+                    if es_error_rate_limit(exc):
+                        raise RateLimitAgotadoError(
+                            "OpenRouter siguió devolviendo HTTP 429 tras "
+                            f"{self._max_reintentos} reintentos."
+                        ) from exc
+                    raise ErrorProveedorAgotadoError(
+                        "El proveedor siguió devolviendo el error genérico "
+                        f"HTTP 400 tras {self._max_reintentos} reintentos."
                     ) from exc
                 espera = self._calcular_espera(numero_reintento, exc)
                 if self._al_reintentar is not None:
@@ -200,3 +288,34 @@ class ReintentoRateLimitMiddleware(AgentMiddleware):
 
     def wrap_model_call(self, request: Any, handler: Callable[[Any], T]) -> T:
         return self._control.ejecutar(lambda: handler(request))
+
+
+class LimpiarRazonamientoOpenRouterMiddleware(AgentMiddleware):
+    """No reenvía bloques de razonamiento opacos en conversaciones con tools.
+
+    Algunas respuestas de Gemini contienen firmas efímeras que el adaptador
+    OpenRouter 0.2.8 conserva en ``additional_kwargs``. Reenviarlas en el
+    siguiente turno puede producir ``Provider returned error``.
+    """
+
+    @staticmethod
+    def _limpiar_mensaje(mensaje: Any) -> Any:
+        if not isinstance(mensaje, AIMessage):
+            return mensaje
+        adicionales = dict(mensaje.additional_kwargs)
+        modificados = False
+        for clave in ("reasoning_content", "reasoning_details"):
+            if clave in adicionales:
+                adicionales.pop(clave)
+                modificados = True
+        if not modificados:
+            return mensaje
+        return mensaje.model_copy(update={"additional_kwargs": adicionales})
+
+    def wrap_model_call(
+        self,
+        request: ModelRequest,
+        handler: Callable[[ModelRequest], T],
+    ) -> T:
+        mensajes = [self._limpiar_mensaje(m) for m in request.messages]
+        return handler(request.override(messages=mensajes))

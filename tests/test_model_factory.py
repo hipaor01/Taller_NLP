@@ -27,6 +27,7 @@ class TestFabricaModelos(unittest.TestCase):
             temperature=0,
             timeout=60_000,
             max_retries=1,
+            reasoning={"exclude": True},
             max_tokens=500,
         )
 

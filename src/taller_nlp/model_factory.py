@@ -37,6 +37,9 @@ def crear_modelo_chat(
         # 300 s en esta versión. Una sola ventana evita esperas desproporcionadas
         # ante errores transitorios sin desactivar el retry del SDK.
         opciones["max_retries"] = 1
+        # Evita que firmas opacas de razonamiento de Gemini vuelvan a enviarse
+        # en el siguiente turno de un bucle con herramientas.
+        opciones["reasoning"] = {"exclude": True}
     if max_tokens is not None:
         opciones["max_tokens"] = max_tokens
     if limitador is not None:

@@ -6,6 +6,7 @@ from time import perf_counter
 from typing import Protocol, final
 
 from .contracts import InformeEvaluacion, RespuestaAgente
+from .model_resilience import formatear_excepcion_modelo
 
 
 class MotorAgente(Protocol):
@@ -68,7 +69,7 @@ class AgenteFinanciero:
                 respuesta="",
                 fuente="ninguna",
                 latencia_ms=latencia_ms,
-                error=f"{type(exc).__name__}: {exc}",
+                error=formatear_excepcion_modelo(exc),
             )
 
         if not isinstance(respuesta, RespuestaAgente):

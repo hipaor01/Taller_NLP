@@ -24,6 +24,7 @@ from taller_nlp import (
     AgenteFinanciero,
     ConfiguracionAgente,
     ControlPeticionesModelo,
+    ErrorTransitorioModeloAgotado,
     ConstructorAgente,
     CorpusVariant,
     FabricaHerramientas,
@@ -31,7 +32,6 @@ from taller_nlp import (
     JuezCitasLangChain,
     ManifiestoExperimento,
     RetrieverFaiss,
-    RateLimitAgotadoError,
 )
 from taller_nlp.hashing import calcular_sha256
 
@@ -269,9 +269,13 @@ def _ruta_progreso_automatica(ruta_golden: Path) -> Path:
 def _informar_reintento(
     numero: int, espera_s: float, error: BaseException
 ) -> None:
-    del error
+    causa = (
+        "rate limit"
+        if type(error).__name__ == "TooManyRequestsResponseError"
+        else "error transitorio del proveedor"
+    )
     print(
-        f"[baseline] Rate limit: reintento {numero} en {espera_s:.1f} s...",
+        f"[baseline] {causa}: reintento {numero} en {espera_s:.1f} s...",
         file=sys.stderr,
         flush=True,
     )
@@ -369,7 +373,7 @@ def main(argumentos: Sequence[str] | None = None) -> int:
     else:
         try:
             informe = agente.evaluar(opciones.evaluar)
-        except RateLimitAgotadoError as exc:
+        except ErrorTransitorioModeloAgotado as exc:
             print(f"[baseline] {exc}", file=sys.stderr, flush=True)
             print(
                 "[baseline] Vuelve a ejecutar el mismo comando para continuar.",

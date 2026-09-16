@@ -97,6 +97,17 @@ class AlmacenProgresoEvaluacion:
         self._resultados[resultado.id_pregunta] = resultado
         self._guardar()
 
+    def descartar(self, ids_pregunta: set[str]) -> None:
+        """Elimina resultados no definitivos conservando los casos válidos."""
+        if self._contexto is None:
+            raise RuntimeError("Debe llamarse preparar() antes de descartar().")
+        cambio = False
+        for id_pregunta in ids_pregunta:
+            if self._resultados.pop(id_pregunta, None) is not None:
+                cambio = True
+        if cambio:
+            self._guardar()
+
     def _guardar(self) -> None:
         assert self._contexto is not None
         self._ruta.parent.mkdir(parents=True, exist_ok=True)

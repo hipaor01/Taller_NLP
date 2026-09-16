@@ -23,6 +23,7 @@ from .corpus import CorpusVariant
 from .model_factory import crear_modelo_chat
 from .model_resilience import (
     ControlPeticionesModelo,
+    LimpiarRazonamientoOpenRouterMiddleware,
     ReintentoRateLimitMiddleware,
 )
 from .retrieval import extraer_chunk_ids_formateados
@@ -120,10 +121,16 @@ class MotorLangChain:
             )
             for nombre, limite in self._configuracion.limites_por_herramienta.items()
         )
+        compatibilidad_openrouter: tuple[AgentMiddleware, ...] = ()
+        if self._configuracion.modelo.partition(":")[0].lower() == "openrouter":
+            compatibilidad_openrouter = (
+                LimpiarRazonamientoOpenRouterMiddleware(),
+            )
         return (
             _ToolTimingMiddleware(),
             *self._middlewares_usuario,
             *limites,
+            *compatibilidad_openrouter,
             ReintentoRateLimitMiddleware(self._control_peticiones),
         )
 

@@ -47,8 +47,12 @@ modelo y a las herramientas. Cada llamada al modelo tiene un timeout de 60
 segundos. Agente y juez comparten un límite de 18 peticiones por minuto, sin
 ráfagas, para respetar el máximo de 20 RPM de las cuentas nuevas de OpenRouter.
 Si aun así reciben un HTTP 429, hacen hasta tres reintentos con esperas de
-aproximadamente 5, 10 y 20 segundos. La primera búsqueda textual puede tardar
-algo más que las siguientes porque carga BGE en memoria.
+aproximadamente 5, 10 y 20 segundos. Esos mismos reintentos se aplican al 400
+genérico `Provider returned error`, sin reintentar otros errores 400 que sí
+indican una petición inválida. En OpenRouter se excluyen además los bloques de
+razonamiento opaco del historial para evitar firmas de pensamiento inválidas
+en los turnos posteriores a una herramienta. La primera búsqueda textual puede
+tardar algo más que las siguientes porque carga BGE en memoria.
 
 Este proyecto usa un entorno Conda almacenado en `.venv`; no se activa con
 `source .venv/bin/activate`. También se puede evitar la activación y ejecutar
@@ -70,7 +74,7 @@ python -m experimentos.baseline --evaluar golden_set.jsonl
 El programa crea automáticamente un fichero en
 `experimentos/resultados/progreso/` y guarda en él cada pregunta completamente
 evaluada. El progreso se conserva si se cancela con `Ctrl+C`, falla la conexión
-o se agotan los reintentos de un HTTP 429.
+o se agotan los reintentos de un HTTP 429 o del error genérico del proveedor.
 
 ### Continuar una evaluación interrumpida
 
@@ -84,6 +88,11 @@ python -m experimentos.baseline --evaluar golden_set.jsonl
 El evaluador cargará las preguntas ya terminadas y comenzará por la primera
 pendiente. Esos casos no vuelven a llamar al agente ni al juez, por lo que no
 vuelven a generar coste.
+
+Los resultados antiguos cuyo error sea `Provider returned error` o HTTP 429 se
+consideran incompletos y se vuelven a ejecutar automáticamente. El resto del
+progreso válido se conserva; no hace falta utilizar `--reiniciar-progreso` para
+reparar estos errores transitorios.
 
 ### Elegir el fichero de progreso
 

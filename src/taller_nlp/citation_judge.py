@@ -12,7 +12,7 @@ from pydantic import BaseModel, Field
 from .model_factory import crear_modelo_chat
 from .model_resilience import (
     ControlPeticionesModelo,
-    es_error_rate_limit,
+    es_error_transitorio_modelo,
 )
 
 
@@ -130,7 +130,7 @@ class JuezCitasLangChain:
                 veredicto = _VeredictoCita.model_validate(resultado)
                 return veredicto.respalda
             except Exception as exc:
-                if es_error_rate_limit(exc):
+                if es_error_transitorio_modelo(exc):
                     raise
                 ultimo_error = exc
         assert ultimo_error is not None

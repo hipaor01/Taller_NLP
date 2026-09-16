@@ -25,6 +25,9 @@ from .faiss_retriever import RetrieverFaiss
 from .citation_judge import JuezCitasLangChain
 from .model_resilience import (
     ControlPeticionesModelo,
+    ErrorProveedorAgotadoError,
+    ErrorTransitorioModeloAgotado,
+    LimpiarRazonamientoOpenRouterMiddleware,
     RateLimitAgotadoError,
     ReintentoRateLimitMiddleware,
 )
@@ -38,6 +41,8 @@ __all__ = [
     "ConfiguracionAgente",
     "ControlPeticionesModelo",
     "ContextoProgreso",
+    "ErrorProveedorAgotadoError",
+    "ErrorTransitorioModeloAgotado",
     "ConstructorAgente",
     "ConstructorCorpusVariant",
     "CorteFragmento",
@@ -52,6 +57,7 @@ __all__ = [
     "InformeEvaluacion",
     "IndexadorCorpus",
     "LlamadaHerramienta",
+    "LimpiarRazonamientoOpenRouterMiddleware",
     "JuezCitas",
     "JuezCitasLangChain",
     "MotorAgente",
