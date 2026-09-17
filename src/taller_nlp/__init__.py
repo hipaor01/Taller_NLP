@@ -3,6 +3,7 @@
 from .agent import AgenteFinanciero, EvaluadorAgente, MotorAgente
 from .assembly import ConstructorAgente
 from .config import ConfiguracionAgente
+from .console_progress import ProgresoConsolaMiddleware
 from .chunking import CorteFragmento, FragmentoCorpus, TroceadorCorpus
 from .corpus import CorpusVariant
 from .corpus_builder import ConstructorCorpusVariant
@@ -63,6 +64,7 @@ __all__ = [
     "MotorAgente",
     "MotorLangChain",
     "ManifiestoExperimento",
+    "ProgresoConsolaMiddleware",
     "RespuestaAgente",
     "RespuestaFinanciera",
     "RateLimitAgotadoError",

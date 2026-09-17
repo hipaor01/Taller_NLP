@@ -15,7 +15,6 @@ import sys
 from collections.abc import Sequence
 from datetime import datetime, timezone
 from pathlib import Path
-from time import perf_counter
 
 from langchain.agents.middleware import AgentMiddleware
 from langchain_core.language_models import BaseChatModel
@@ -31,6 +30,7 @@ from taller_nlp import (
     JuezCitas,
     JuezCitasLangChain,
     ManifiestoExperimento,
+    ProgresoConsolaMiddleware,
     RetrieverFaiss,
 )
 from taller_nlp.hashing import calcular_sha256
@@ -58,71 +58,6 @@ Reglas:
 - Cita el chunk_id del fragmento en el que te apoyes.
 - Si el dato no está en el corpus, dilo. No lo estimes.
 """
-
-
-class ProgresoConsolaMiddleware(AgentMiddleware):
-    """Hace visible la fase en curso sin alterar respuestas ni herramientas."""
-
-    def __init__(self) -> None:
-        self._numero_llamada_modelo = 0
-
-    @property
-    def parametros(self) -> dict[str, object]:
-        return {"destino": "stderr", "muestra_argumentos_tools": True}
-
-    def wrap_model_call(self, request, handler):
-        self._numero_llamada_modelo += 1
-        numero = self._numero_llamada_modelo
-        inicio = perf_counter()
-        print(
-            f"[baseline] Llamada {numero} al modelo...",
-            file=sys.stderr,
-            flush=True,
-        )
-        try:
-            resultado = handler(request)
-        except Exception as exc:
-            print(
-                f"[baseline] La llamada {numero} falló: "
-                f"{type(exc).__name__}: {exc}",
-                file=sys.stderr,
-                flush=True,
-            )
-            raise
-        print(
-            f"[baseline] Llamada {numero} completada en "
-            f"{perf_counter() - inicio:.1f} s.",
-            file=sys.stderr,
-            flush=True,
-        )
-        return resultado
-
-    def wrap_tool_call(self, request, handler):
-        nombre = request.tool_call.get("name", "desconocida")
-        argumentos = request.tool_call.get("args", {})
-        inicio = perf_counter()
-        print(
-            f"[baseline] Tool {nombre}({argumentos})...",
-            file=sys.stderr,
-            flush=True,
-        )
-        try:
-            resultado = handler(request)
-        except Exception as exc:
-            print(
-                f"[baseline] Tool {nombre} falló: "
-                f"{type(exc).__name__}: {exc}",
-                file=sys.stderr,
-                flush=True,
-            )
-            raise
-        print(
-            f"[baseline] Tool {nombre} completada en "
-            f"{perf_counter() - inicio:.1f} s.",
-            file=sys.stderr,
-            flush=True,
-        )
-        return resultado
 
 
 def crear_corpus_baseline() -> CorpusVariant:

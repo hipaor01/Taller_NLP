@@ -9,12 +9,12 @@ import faiss
 
 from experimentos.baseline import (
     MODELO_AGENTE,
-    ProgresoConsolaMiddleware,
     SYSTEM_PROMPT,
     crear_configuracion_baseline,
     crear_constructor_baseline,
     crear_corpus_baseline,
 )
+from taller_nlp import ProgresoConsolaMiddleware
 
 
 class TestEjemploBaseline(unittest.TestCase):
@@ -64,8 +64,18 @@ class TestEjemploBaseline(unittest.TestCase):
                 "tool-ok",
             )
         texto = salida.getvalue()
+        self.assertIn("[baseline]", texto)
         self.assertIn("Llamada 1 al modelo", texto)
         self.assertIn("Tool list_available", texto)
+
+    def test_middleware_admite_etiqueta_de_otro_experimento(self) -> None:
+        middleware = ProgresoConsolaMiddleware("reranking")
+        salida = io.StringIO()
+        with redirect_stderr(salida):
+            middleware.wrap_model_call(object(), lambda _: "ok")
+
+        self.assertIn("[reranking] Llamada 1 al modelo", salida.getvalue())
+        self.assertEqual(middleware.parametros["etiqueta"], "reranking")
 
 
 if __name__ == "__main__":
