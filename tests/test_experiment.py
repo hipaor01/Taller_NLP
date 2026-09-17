@@ -11,6 +11,7 @@ from pydantic import ValidationError
 from taller_nlp import (
     ConfiguracionAgente,
     ConstructorAgente,
+    FragmentoCorpus,
     InformeEvaluacion,
     ManifiestoExperimento,
     DescriptorComponente,
@@ -21,7 +22,10 @@ from taller_nlp import (
 from tests.support import crear_corpus_temporal, crear_fabrica_prueba
 
 
-def juez_determinista(respuesta: str, evidencias: tuple[str, ...]) -> bool:
+def juez_determinista(
+    respuesta: str,
+    evidencias: tuple[FragmentoCorpus, ...],
+) -> bool:
     return bool(respuesta and evidencias)
 
 

@@ -13,6 +13,7 @@ from taller_nlp import (
     LlamadaHerramienta,
     RateLimitAgotadoError,
     RespuestaAgente,
+    VeredictoCita,
 )
 
 from tests.support import ANCLA_2024, TEXTO_2024, crear_corpus_temporal, escribir_jsonl
@@ -99,11 +100,14 @@ class TestEvaluadorFinanciero(unittest.TestCase):
             corpus, _ = crear_corpus_temporal(raiz / "corpus")
             ruta = raiz / "evaluacion.jsonl"
             escribir_jsonl(ruta, [caso_extractivo(), caso_numerico()])
-            juez_llamadas: list[tuple[str, tuple[str, ...]]] = []
+            juez_llamadas = []
 
             def juez(respuesta, evidencias):
                 juez_llamadas.append((respuesta, evidencias))
-                return True
+                return VeredictoCita(
+                    respalda=True,
+                    justificacion="La evidencia contiene la consecuencia.",
+                )
 
             evaluador = EvaluadorFinanciero(
                 corpus,
@@ -168,6 +172,16 @@ class TestEvaluadorFinanciero(unittest.TestCase):
             self.assertEqual(informe.coste_medio_usd, 0.02)
             self.assertEqual(informe.llamadas_por_pregunta, 1)
             self.assertEqual(len(juez_llamadas), 1)
+            evidencia = juez_llamadas[0][1][0]
+            self.assertEqual(evidencia.chunk_id, "ACME-2024-1A-0000")
+            self.assertEqual(evidencia.ticker, "ACME")
+            self.assertEqual(evidencia.fiscal_year, 2024)
+            self.assertEqual(evidencia.item, "1A")
+            self.assertEqual(evidencia.texto, TEXTO_2024)
+            self.assertEqual(
+                informe.resultados[0].justificacion_cita,
+                "La evidencia contiene la consecuencia.",
+            )
 
     def test_una_llamada_con_concept_incorrecto_no_cumple_trayectoria(self) -> None:
         with tempfile.TemporaryDirectory() as temporal:

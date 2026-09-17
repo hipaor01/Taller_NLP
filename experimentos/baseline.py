@@ -32,6 +32,7 @@ from taller_nlp import (
     ManifiestoExperimento,
     ProgresoConsolaMiddleware,
     RetrieverFaiss,
+    VERSION_PROTOCOLO_CITAS,
 )
 from taller_nlp.hashing import calcular_sha256
 
@@ -197,7 +198,10 @@ def _ruta_progreso_automatica(ruta_golden: Path) -> Path:
     return (
         DIRECTORIO_RESULTADOS
         / "progreso"
-        / f"baseline-notebook-s1_{ruta_golden.stem}_{huella}.json"
+        / (
+            f"baseline-notebook-s1_{ruta_golden.stem}_{huella}_"
+            f"citas-v{VERSION_PROTOCOLO_CITAS}.json"
+        )
     )
 
 

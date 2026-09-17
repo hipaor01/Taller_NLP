@@ -13,6 +13,8 @@ from .contracts import (
     RespuestaAgente,
     RespuestaFinanciera,
     ResultadoPregunta,
+    VERSION_PROTOCOLO_CITAS,
+    VeredictoCita,
 )
 from .tool_suite import ToolSuite
 from .tool_factory import FabricaHerramientas
@@ -74,4 +76,6 @@ __all__ = [
     "ResultadoPregunta",
     "ToolSuite",
     "TroceadorCorpus",
+    "VERSION_PROTOCOLO_CITAS",
+    "VeredictoCita",
 ]

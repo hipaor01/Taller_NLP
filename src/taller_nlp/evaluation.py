@@ -9,11 +9,14 @@ import re
 from collections.abc import Callable
 from pathlib import Path
 
+from .chunking import FragmentoCorpus
 from .contracts import (
     InformeEvaluacion,
     LlamadaHerramienta,
     RespuestaAgente,
     ResultadoPregunta,
+    VERSION_PROTOCOLO_CITAS,
+    VeredictoCita,
 )
 from .corpus import CorpusVariant
 from .golden import CasoGolden
@@ -33,7 +36,10 @@ from .model_resilience import (
 )
 
 
-JuezCitas = Callable[[str, tuple[str, ...]], bool]
+JuezCitas = Callable[
+    [str, tuple[FragmentoCorpus, ...]],
+    bool | VeredictoCita,
+]
 
 
 class EvaluadorFinanciero:
@@ -235,11 +241,15 @@ class EvaluadorFinanciero:
 
         cita_existe = None
         cita_respalda = None
+        justificacion_cita = None
         recall_at_k = None
         if caso.familia in {"extractiva", "comparativa"}:
-            cita_existe, cita_respalda, error_juez = self._evaluar_citas(
-                caso, respuesta
-            )
+            (
+                cita_existe,
+                cita_respalda,
+                justificacion_cita,
+                error_juez,
+            ) = self._evaluar_citas(caso, respuesta)
             recall_at_k = self._calcular_recall(caso, respuesta)
             if not cita_existe:
                 observaciones.append("Falta una cita o algún chunk_id no existe.")
@@ -254,6 +264,7 @@ class EvaluadorFinanciero:
             respuesta_agente=respuesta,
             cita_existe=cita_existe,
             cita_respalda=cita_respalda,
+            justificacion_cita=justificacion_cita,
             cifra_correcta=cifra_correcta,
             trayectoria_correcta=trayectoria,
             recall_at_k=recall_at_k,
@@ -262,22 +273,29 @@ class EvaluadorFinanciero:
 
     def _evaluar_citas(
         self, caso: CasoGolden, respuesta: RespuestaAgente
-    ) -> tuple[bool, bool, str | None]:
+    ) -> tuple[bool, bool, str | None, str | None]:
         ids = respuesta.citas
         cita_existe = bool(ids) and all(chunk_id in self._chunks for chunk_id in ids)
         if not cita_existe:
-            return False, False, None
+            return False, False, None, None
 
         evidencias = tuple(self._chunks[chunk_id] for chunk_id in ids)
+        ancla = caso.ancla_texto
+        if ancla is None:
+            return True, False, None, None
         contiene_ancla = any(
-            caso.ancla_texto in evidencia for evidencia in evidencias
+            ancla in evidencia.texto for evidencia in evidencias
         )
         if not contiene_ancla:
-            return True, False, None
+            return True, False, None, None
         try:
-            respaldo_semantico = bool(
-                self._juez_citas(respuesta.respuesta, evidencias)
-            )
+            resultado_juez = self._juez_citas(respuesta.respuesta, evidencias)
+            if isinstance(resultado_juez, VeredictoCita):
+                respaldo_semantico = resultado_juez.respalda
+                justificacion = resultado_juez.justificacion
+            else:
+                respaldo_semantico = bool(resultado_juez)
+                justificacion = None
         except Exception as exc:
             if es_error_transitorio_modelo(exc):
                 tipo_error = (
@@ -288,8 +306,8 @@ class EvaluadorFinanciero:
                 raise tipo_error(
                     f"Error transitorio al juzgar las citas de {caso.id}."
                 ) from exc
-            return True, False, formatear_excepcion_modelo(exc)
-        return True, respaldo_semantico, None
+            return True, False, None, formatear_excepcion_modelo(exc)
+        return True, respaldo_semantico, justificacion, None
 
     def _cifra_correcta(
         self, caso: CasoGolden, respuesta: RespuestaAgente
@@ -318,7 +336,9 @@ class EvaluadorFinanciero:
         ejercicios = self._ejercicios_requeridos(caso)
         for nombre in caso.herramienta_esperada:
             if nombre == "list_available":
-                if not any(l.nombre == nombre for l in llamadas):
+                if not any(
+                    llamada.nombre == nombre for llamada in llamadas
+                ):
                     return False
             elif nombre == "get_xbrl_fact":
                 if not all(
@@ -388,6 +408,9 @@ class EvaluadorFinanciero:
     def _calcular_recall(
         self, caso: CasoGolden, respuesta: RespuestaAgente
     ) -> float:
+        ancla = caso.ancla_texto
+        if ancla is None:
+            return 0.0
         recuperados = {
             chunk_id
             for llamada in respuesta.llamadas
@@ -395,29 +418,30 @@ class EvaluadorFinanciero:
             for chunk_id in llamada.chunk_ids[: self._k]
         }
         encontro_ancla = any(
-            caso.ancla_texto in self._chunks.get(chunk_id, "")
+            ancla in fragmento.texto
             for chunk_id in recuperados
+            if (fragmento := self._chunks.get(chunk_id)) is not None
         )
         return float(encontro_ancla)
 
     @staticmethod
-    def _cargar_chunks(ruta: Path) -> dict[str, str]:
-        chunks = {}
+    def _cargar_chunks(ruta: Path) -> dict[str, FragmentoCorpus]:
+        chunks: dict[str, FragmentoCorpus] = {}
         with ruta.open(encoding="utf-8") as fichero:
             for numero_linea, linea in enumerate(fichero, start=1):
                 if not linea.strip():
                     continue
                 try:
                     fila = json.loads(linea)
-                    chunk_id = fila["chunk_id"]
-                    texto = fila["texto"]
-                except (json.JSONDecodeError, KeyError) as exc:
+                    fragmento = FragmentoCorpus.model_validate(fila)
+                    chunk_id = fragmento.chunk_id
+                except (json.JSONDecodeError, ValueError) as exc:
                     raise ValueError(
                         f"Chunk inválido en {ruta}:{numero_linea}."
                     ) from exc
                 if chunk_id in chunks:
                     raise ValueError(f"chunk_id duplicado: {chunk_id}")
-                chunks[chunk_id] = texto
+                chunks[chunk_id] = fragmento
         return chunks
 
     def _nombre_juez(self) -> str:
@@ -435,6 +459,7 @@ class EvaluadorFinanciero:
     ) -> ContextoProgreso:
         parametros_juez = getattr(self._juez_citas, "parametros", None)
         firma = {
+            "version_protocolo_citas": VERSION_PROTOCOLO_CITAS,
             "corpus": self._corpus.model_dump(mode="json"),
             "k_retrieval": self._k,
             "tolerancia_absoluta": self._tolerancia_absoluta,
