@@ -332,6 +332,45 @@ class TestEvaluadorFinanciero(unittest.TestCase):
                 informe.resultados[0].respuesta_agente.error
             )
 
+    def test_reintenta_un_graph_recursion_guardado_en_progreso(self) -> None:
+        with tempfile.TemporaryDirectory() as temporal:
+            raiz = Path(temporal)
+            corpus, _ = crear_corpus_temporal(raiz / "corpus")
+            ruta_golden = raiz / "golden.jsonl"
+            ruta_progreso = raiz / "progreso.json"
+            escribir_jsonl(ruta_golden, [caso_numerico()])
+            evaluador = EvaluadorFinanciero(
+                corpus, lambda *_: True, ruta_progreso=ruta_progreso
+            )
+            evaluador.evaluar(
+                nombre_agente="agente-v1",
+                ruta_jsonl=ruta_golden,
+                responder=lambda _: self._respuesta_numerica(2024, 100),
+            )
+
+            datos = json.loads(ruta_progreso.read_text(encoding="utf-8"))
+            datos["resultados"][0]["respuesta_agente"]["error"] = (
+                "GraphRecursionError: Recursion limit of 25 reached"
+            )
+            ruta_progreso.write_text(
+                json.dumps(datos, ensure_ascii=False), encoding="utf-8"
+            )
+            llamadas = 0
+
+            def responder(_: str) -> RespuestaAgente:
+                nonlocal llamadas
+                llamadas += 1
+                return self._respuesta_numerica(2024, 100)
+
+            informe = evaluador.evaluar(
+                nombre_agente="agente-v1",
+                ruta_jsonl=ruta_golden,
+                responder=responder,
+            )
+            self.assertEqual(llamadas, 1)
+            self.assertEqual(informe.aciertos_totales, 1)
+            self.assertIsNone(informe.resultados[0].respuesta_agente.error)
+
     @staticmethod
     def _respuesta_numerica(anio: int, cifra: float) -> RespuestaAgente:
         llamada = LlamadaHerramienta(

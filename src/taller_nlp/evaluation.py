@@ -133,7 +133,7 @@ class EvaluadorFinanciero:
             no_definitivos = {
                 id_pregunta
                 for id_pregunta, resultado in anteriores.items()
-                if texto_indica_error_transitorio(
+                if self._error_guardado_reintentable(
                     resultado.respuesta_agente.error
                 )
             }
@@ -177,6 +177,13 @@ class EvaluadorFinanciero:
             tolerancia_absoluta=self._tolerancia_absoluta,
             tolerancia_relativa=self._tolerancia_relativa,
             metodo_soporte_citas=self._nombre_juez(),
+        )
+
+    @staticmethod
+    def _error_guardado_reintentable(error: str | None) -> bool:
+        """Detecta resultados previos que no deben considerarse definitivos."""
+        return texto_indica_error_transitorio(error) or bool(
+            error and "graphrecursionerror" in error.casefold()
         )
 
     @staticmethod

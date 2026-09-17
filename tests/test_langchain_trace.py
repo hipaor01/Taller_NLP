@@ -1,14 +1,50 @@
 from __future__ import annotations
 
 import unittest
+from types import SimpleNamespace
 
 from langchain_core.messages import AIMessage, ToolMessage
 
-from taller_nlp import ConfiguracionAgente, MotorLangChain
+from taller_nlp import ConfiguracionAgente, MotorLangChain, RespuestaFinanciera
 from taller_nlp import ControlPeticionesModelo
 
 
+class _AgenteControlado:
+    def __init__(self) -> None:
+        self.configuraciones: list[dict] = []
+
+    def invoke(self, entrada: dict, config: dict) -> dict:
+        self.configuraciones.append(config)
+        return {
+            "messages": (),
+            "structured_response": RespuestaFinanciera(
+                respuesta="Respuesta de prueba.",
+                fuente="ninguna",
+            ),
+        }
+
+
 class TestTrazaLangChain(unittest.TestCase):
+    def test_reserva_supersteps_suficientes_para_las_iteraciones(self) -> None:
+        for max_iteraciones, esperado in ((3, 50), (8, 64)):
+            with self.subTest(max_iteraciones=max_iteraciones):
+                configuracion = ConfiguracionAgente(
+                    modelo="modelo",
+                    system_prompt="prompt",
+                    max_iteraciones=max_iteraciones,
+                )
+                agente = _AgenteControlado()
+                motor = object.__new__(MotorLangChain)
+                motor._configuracion = configuracion
+                motor._corpus = SimpleNamespace(nombre="prueba")
+                motor._agente = agente
+
+                motor.responder("Pregunta de prueba")
+
+                self.assertEqual(
+                    agente.configuraciones[0]["recursion_limit"], esperado
+                )
+
     def test_materializa_limites_globales_y_por_herramienta(self) -> None:
         configuracion = ConfiguracionAgente(
             modelo="modelo",

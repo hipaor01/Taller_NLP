@@ -89,10 +89,10 @@ El evaluador cargará las preguntas ya terminadas y comenzará por la primera
 pendiente. Esos casos no vuelven a llamar al agente ni al juez, por lo que no
 vuelven a generar coste.
 
-Los resultados antiguos cuyo error sea `Provider returned error` o HTTP 429 se
-consideran incompletos y se vuelven a ejecutar automáticamente. El resto del
-progreso válido se conserva; no hace falta utilizar `--reiniciar-progreso` para
-reparar estos errores transitorios.
+Los resultados antiguos cuyo error sea `Provider returned error`, HTTP 429 o
+`GraphRecursionError` se consideran incompletos y se vuelven a ejecutar
+automáticamente. El resto del progreso válido se conserva; no hace falta
+utilizar `--reiniciar-progreso` para reparar esos casos.
 
 ### Elegir el fichero de progreso
 

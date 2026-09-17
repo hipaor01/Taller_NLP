@@ -153,7 +153,7 @@ class MotorLangChain:
             {"messages": [{"role": "user", "content": pregunta}]},
             config={
                 "recursion_limit": max(
-                    25, self._configuracion.max_iteraciones * 4
+                    50, self._configuracion.max_iteraciones * 8
                 ),
                 "metadata": {"corpus_variant": self._corpus.nombre},
             },
