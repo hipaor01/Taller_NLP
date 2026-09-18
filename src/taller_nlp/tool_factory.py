@@ -149,6 +149,16 @@ class FabricaHerramientas:
         )
         self._read_section_impl = read_section_impl or self._read_section_baseline
         self._descripciones = {**_DESCRIPCIONES, **descripciones_recibidas}
+        if (
+            retriever is not None
+            and not retriever.aplica_filtros_metadatos
+            and "search_filings" not in descripciones_recibidas
+        ):
+            self._descripciones["search_filings"] += (
+                "\n\nNota de esta configuración: ticker, fiscal_year e item "
+                "se aceptan para conservar el contrato, pero no restringen "
+                "el ranking denso."
+            )
 
         necesita_secciones = list_available_impl is None or read_section_impl is None
         self._secciones = (

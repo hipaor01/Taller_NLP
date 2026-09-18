@@ -5,9 +5,12 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+from langgraph.checkpoint.memory import InMemorySaver
+
 from taller_nlp import (
     ConfiguracionAgente,
     ConstructorAgente,
+    RegistroTelemetriaAuxiliar,
     RespuestaAgente,
 )
 
@@ -26,6 +29,8 @@ class MotorControlado:
         middlewares=(),
         modelo=None,
         control_peticiones=None,
+        checkpointer=None,
+        telemetria_auxiliar=None,
     ) -> None:
         self.construcciones.append(
             {
@@ -35,6 +40,8 @@ class MotorControlado:
                 "middlewares": middlewares,
                 "modelo": modelo,
                 "control_peticiones": control_peticiones,
+                "checkpointer": checkpointer,
+                "telemetria_auxiliar": telemetria_auxiliar,
             }
         )
 
@@ -49,6 +56,41 @@ class MotorControlado:
 class TestConstructorAgente(unittest.TestCase):
     def setUp(self) -> None:
         MotorControlado.construcciones.clear()
+
+    def test_expone_el_motor_ensamblado(self) -> None:
+        with tempfile.TemporaryDirectory() as temporal:
+            corpus, _ = crear_corpus_temporal(Path(temporal))
+            configuracion = ConfiguracionAgente(
+                modelo="modelo-prueba",
+                system_prompt="Responde con evidencia.",
+            )
+            constructor = ConstructorAgente(
+                "equipo-a",
+                configuracion,
+                corpus,
+                crear_fabrica_prueba(corpus),
+                lambda *_: True,
+                telemetria_auxiliar=RegistroTelemetriaAuxiliar(),
+            )
+
+            with patch("taller_nlp.assembly.MotorLangChain", MotorControlado):
+                checkpointer = InMemorySaver()
+                motor = constructor.construir_motor(checkpointer=checkpointer)
+
+            self.assertIsInstance(motor, MotorControlado)
+            self.assertEqual(len(MotorControlado.construcciones), 1)
+            construccion = MotorControlado.construcciones[0]
+            self.assertIs(construccion["configuracion"], configuracion)
+            self.assertIs(construccion["corpus"], corpus)
+            self.assertIs(
+                construccion["control_peticiones"],
+                constructor.control_peticiones,
+            )
+            self.assertIs(construccion["checkpointer"], checkpointer)
+            self.assertIs(
+                construccion["telemetria_auxiliar"],
+                constructor.telemetria_auxiliar,
+            )
 
     def test_ensambla_fachada_con_componentes_del_mismo_corpus(self) -> None:
         with tempfile.TemporaryDirectory() as temporal:

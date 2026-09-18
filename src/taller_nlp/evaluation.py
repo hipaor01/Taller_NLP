@@ -41,6 +41,9 @@ JuezCitas = Callable[
     bool | VeredictoCita,
 ]
 
+_ESPACIOS = re.compile(r"\s+")
+_CARACTERES_CITA_COMPROBADOS = 120
+
 
 class EvaluadorFinanciero:
     """Evalúa respuestas, evidencia, cifras y trayectorias contra un JSONL."""
@@ -280,11 +283,27 @@ class EvaluadorFinanciero:
             return False, False, None, None
 
         evidencias = tuple(self._chunks[chunk_id] for chunk_id in ids)
+        cita = respuesta.cita
+        if cita is None:
+            return True, False, None, None
+        prefijo_cita = self._normalizar_texto(cita)[
+            :_CARACTERES_CITA_COMPROBADOS
+        ]
+        evidencias_normalizadas = tuple(
+            self._normalizar_texto(evidencia.texto)
+            for evidencia in evidencias
+        )
+        if not prefijo_cita or not any(
+            prefijo_cita in texto for texto in evidencias_normalizadas
+        ):
+            return True, False, None, None
+
         ancla = caso.ancla_texto
         if ancla is None:
             return True, False, None, None
+        ancla_normalizada = self._normalizar_texto(ancla)
         contiene_ancla = any(
-            ancla in evidencia.texto for evidencia in evidencias
+            ancla_normalizada in texto for texto in evidencias_normalizadas
         )
         if not contiene_ancla:
             return True, False, None, None
@@ -308,6 +327,11 @@ class EvaluadorFinanciero:
                 ) from exc
             return True, False, None, formatear_excepcion_modelo(exc)
         return True, respaldo_semantico, justificacion, None
+
+    @staticmethod
+    def _normalizar_texto(texto: str) -> str:
+        """Normaliza espacios y caja para comparar extractos literales."""
+        return _ESPACIOS.sub(" ", texto).strip().casefold()
 
     def _cifra_correcta(
         self, caso: CasoGolden, respuesta: RespuestaAgente
@@ -333,7 +357,7 @@ class EvaluadorFinanciero:
         self, caso: CasoGolden, respuesta: RespuestaAgente
     ) -> bool:
         llamadas = tuple(llamada for llamada in respuesta.llamadas if llamada.exitosa)
-        ejercicios = self._ejercicios_requeridos(caso)
+        ejercicios_xbrl = self._ejercicios_requeridos(caso)
         for nombre in caso.herramienta_esperada:
             if nombre == "list_available":
                 if not any(
@@ -346,16 +370,21 @@ class EvaluadorFinanciero:
                         self._coincide_xbrl(llamada, caso, ejercicio)
                         for llamada in llamadas
                     )
-                    for ejercicio in ejercicios
+                    for ejercicio in ejercicios_xbrl
                 ):
                     return False
             elif nombre in {"search_filings", "read_section"}:
-                if not all(
-                    any(
-                        self._coincide_texto(llamada, caso, ejercicio, nombre)
-                        for llamada in llamadas
+                # El ancla textual pertenece al documento declarado por el
+                # caso. Una comparativa necesita las cifras de ambos ejercicios,
+                # pero no una búsqueda textual redundante en cada uno.
+                if not any(
+                    self._coincide_texto(
+                        llamada,
+                        caso,
+                        caso.fiscal_year,
+                        nombre,
                     )
-                    for ejercicio in ejercicios
+                    for llamada in llamadas
                 ):
                     return False
         return True

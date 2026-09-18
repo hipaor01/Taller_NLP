@@ -1,0 +1,21 @@
+id,familia,ticker,latencia_s,coste_usd,llamadas,cita,cifra,trayectoria,recall,error
+gjhh-001,extractiva,NVDA,23.56882287500048,0.013914300000000001,3,True,,True,1.0,
+gjhh-002,extractiva,MSFT,6.452357500000289,0.00507975,1,False,,True,1.0,
+gjhh-003,extractiva,AAPL,24.18297229199925,0.02953725,6,False,,True,1.0,El agente terminó sin una respuesta estructurada.
+gjhh-004,extractiva,GOOGL,21.193906667000192,0.037758,6,False,,True,0.0,El agente terminó sin una respuesta estructurada.
+gjhh-005,extractiva,META,7.348504999999932,0.0056707500000000004,1,True,,True,1.0,
+gjhh-006,extractiva,AMZN,8.771942499999568,0.007188,2,False,,False,1.0,
+gjhh-007,numerica,NVDA,5.838180832999569,0.0026107500000000002,1,,True,True,,
+gjhh-008,numerica,MSFT,9.609120708000773,0.00391425,2,,True,True,,
+gjhh-009,numerica,AAPL,10.084776625000814,0.003894,2,,True,True,,
+gjhh-010,numerica,GOOGL,11.435218584001632,0.00368775,2,,True,True,,
+gjhh-011,numerica,META,9.242227417000322,0.003579,2,,True,True,,
+gjhh-012,numerica,AMZN,13.420127875000617,0.00530475,3,,True,True,,
+gjhh-013,comparativa,NVDA,10.739407208000557,0.0040462499999999995,3,False,True,True,0.0,
+gjhh-014,comparativa,MSFT,9.451361542000086,0.00402225,3,False,True,True,0.0,
+gjhh-015,comparativa,AAPL,13.713184709000416,0.00512475,3,False,True,True,0.0,
+gjhh-016,comparativa,GOOGL,14.82714091699927,0.00541125,3,False,True,True,0.0,
+gjhh-017,comparativa,META,17.457448832999944,0.01297575,5,False,True,True,0.0,
+gjhh-018,comparativa,AAPL,8.943342791999385,0.004128,3,False,True,True,0.0,
+gjhh-019,comparativa,GOOGL,15.669933166000192,0.0089625,4,False,True,True,1.0,
+gjhh-020,comparativa,AMZN,12.608306165999238,0.00544275,3,False,False,True,0.0,

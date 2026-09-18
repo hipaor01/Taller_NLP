@@ -1,0 +1,2 @@
+versión,cita,cifra,trayectoria,recall@5,coste medio (¢),latencia media (s),llamadas/pregunta
+baseline,0.14285714285714285,0.9285714285714286,0.95,0.42857142857142855,0.8612602499999995,12.727914210450127,2.9

@@ -14,6 +14,16 @@ class ConfiguracionAgente(BaseModel):
     system_prompt: str = Field(min_length=1)
     temperatura: float = Field(default=0, ge=0, le=2)
     max_tokens_salida: int | None = Field(default=None, gt=0)
+    precio_entrada_usd_millon_tokens: float | None = Field(
+        default=None,
+        ge=0,
+        description="Tarifa de entrada para estimar el coste si falta telemetría.",
+    )
+    precio_salida_usd_millon_tokens: float | None = Field(
+        default=None,
+        ge=0,
+        description="Tarifa de salida para estimar el coste si falta telemetría.",
+    )
     max_iteraciones: int = Field(default=8, gt=0)
     max_llamadas_total: int = Field(default=8, gt=0)
     limites_por_herramienta: dict[NombreHerramienta, int] = Field(
@@ -58,6 +68,12 @@ class ConfiguracionAgente(BaseModel):
 
     @model_validator(mode="after")
     def validar_coherencia_de_limites(self) -> "ConfiguracionAgente":
+        if (
+            self.precio_entrada_usd_millon_tokens is None
+        ) != (self.precio_salida_usd_millon_tokens is None):
+            raise ValueError(
+                "Las tarifas de entrada y salida deben declararse juntas."
+            )
         if any(
             limite > self.max_llamadas_total
             for limite in self.limites_por_herramienta.values()

@@ -31,6 +31,84 @@ si se está probando otro retriever, se pueden importar del baseline
 `crear_corpus_baseline()` y `crear_configuracion_baseline()` y cambiar solo la
 construcción del retriever y de `FabricaHerramientas`.
 
+Toda variante ejecutable desde el notebook debe exponer una factoría común sin
+argumentos:
+
+```python
+def crear_constructor() -> ConstructorAgente:
+    ...
+```
+
+La interfaz usa el baseline por defecto. Para seleccionar otra variante antes
+de la primera llamada a `responder()`:
+
+```bash
+export TALLER_VARIANTE_AGENTE=experimentos.higinio.agente_v002
+```
+
+El módulo indicado debe ser importable y exponer `crear_constructor()`. Como el
+motor y su memoria se conservan durante toda la sesión, hay que reiniciar el
+proceso o el kernel para cambiar de variante después de la primera respuesta.
+
+La interfaz entregable permite ejecutar el hold-out directamente desde un clon
+limpio y guardar la tabla compatible con el notebook:
+
+```python
+from agente import evaluar, resumir
+
+tabla = evaluar("holdout.jsonl", salida="resultados/holdout.csv")
+fila_informe = resumir(tabla, "baseline")
+```
+
+`evaluar_informe("holdout.jsonl")` conserva alternativamente el informe
+estructurado completo, con el desglose por pregunta y las métricas agregadas.
+
+La misma evaluación puede lanzarse directamente desde la terminal:
+
+```bash
+python -m agente \
+  --evaluar holdout.jsonl \
+  --salida resultados/holdout.csv
+```
+
+Una tabla ya generada se puede convertir en la fila resumen del informe. La
+etiqueta se deduce del nombre del fichero (`baseline` en este ejemplo):
+
+```bash
+python -m agente --resumir resultados/baseline.csv
+```
+
+También se pueden indicar la etiqueta y un CSV de salida explícitos:
+
+```bash
+python -m agente \
+  --resumir resultados/baseline.csv \
+  --etiqueta baseline \
+  --salida resultados/resumen_baseline.csv
+```
+
+Para ejecutar otra variante sin modificar código:
+
+```bash
+python -m agente \
+  --variante experimentos.higinio.agente_v002 \
+  --evaluar holdout.jsonl \
+  --salida resultados/final.csv
+```
+
+## Telemetría de modelos auxiliares
+
+Los componentes que hagan llamadas adicionales a un LLM deben compartir un
+`RegistroTelemetriaAuxiliar` con `ConstructorAgente`. Después de cada llamada,
+el componente registra una `LlamadaModeloAuxiliar` con modelo, tokens, coste,
+latencia y posible error. El motor incorpora automáticamente esas llamadas al
+desglose y a los totales de cada respuesta.
+
+Si falta cualquiera de las mediciones auxiliares, el total correspondiente se
+marca como desconocido (`None`) en vez de presentar una suma parcial como si
+fuera completa. La latencia total no se suma manualmente: ya es tiempo de pared
+y contiene el tiempo empleado por las llamadas auxiliares.
+
 ## Ejecutar el baseline
 
 Desde la raíz del proyecto:

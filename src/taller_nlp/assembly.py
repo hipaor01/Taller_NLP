@@ -8,8 +8,10 @@ from typing import final
 
 from langchain.agents.middleware import AgentMiddleware
 from langchain_core.language_models import BaseChatModel
+from langgraph.checkpoint.base import BaseCheckpointSaver
 
 from .agent import AgenteFinanciero
+from .auxiliary_telemetry import RegistroTelemetriaAuxiliar
 from .config import ConfiguracionAgente
 from .corpus import CorpusVariant
 from .evaluation import EvaluadorFinanciero, JuezCitas
@@ -38,6 +40,7 @@ class ConstructorAgente:
         "_middlewares",
         "_modelo",
         "_control_peticiones",
+        "_telemetria_auxiliar",
     )
 
     def __init__(
@@ -51,6 +54,7 @@ class ConstructorAgente:
         middlewares: Sequence[AgentMiddleware] = (),
         modelo: BaseChatModel | None = None,
         control_peticiones: ControlPeticionesModelo | None = None,
+        telemetria_auxiliar: RegistroTelemetriaAuxiliar | None = None,
         k_retrieval: int = 5,
         tolerancia_absoluta: float = 1.0,
         tolerancia_relativa: float = 1e-6,
@@ -91,6 +95,14 @@ class ConstructorAgente:
         self._control_peticiones = control_peticiones or (
             ControlPeticionesModelo.desde_configuracion(configuracion)
         )
+        if telemetria_auxiliar is not None and not isinstance(
+            telemetria_auxiliar,
+            RegistroTelemetriaAuxiliar,
+        ):
+            raise TypeError(
+                "telemetria_auxiliar debe ser un RegistroTelemetriaAuxiliar."
+            )
+        self._telemetria_auxiliar = telemetria_auxiliar
         # Crear el evaluador aquí reutiliza su propia validación de opciones y
         # lo liga necesariamente al mismo corpus que el resto de componentes.
         self._evaluador = EvaluadorFinanciero(
@@ -140,17 +152,31 @@ class ConstructorAgente:
     def control_peticiones(self) -> ControlPeticionesModelo:
         return self._control_peticiones
 
-    def construir(self) -> AgenteFinanciero:
-        """Crea una fachada lista para responder y evaluar."""
+    @property
+    def telemetria_auxiliar(self) -> RegistroTelemetriaAuxiliar | None:
+        return self._telemetria_auxiliar
+
+    def construir_motor(
+        self,
+        *,
+        checkpointer: BaseCheckpointSaver | None = None,
+    ) -> MotorLangChain:
+        """Crea el motor LangChain con los componentes del constructor."""
         herramientas = self._fabrica_herramientas.crear()
-        motor = MotorLangChain(
+        return MotorLangChain(
             configuracion=self._configuracion,
             herramientas=herramientas,
             corpus=self._corpus,
             middlewares=self._middlewares,
             modelo=self._modelo,
             control_peticiones=self._control_peticiones,
+            checkpointer=checkpointer,
+            telemetria_auxiliar=self._telemetria_auxiliar,
         )
+
+    def construir(self) -> AgenteFinanciero:
+        """Crea una fachada lista para responder y evaluar."""
+        motor = self.construir_motor()
         return AgenteFinanciero(
             nombre=self._nombre,
             motor=motor,

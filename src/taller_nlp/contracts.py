@@ -8,6 +8,7 @@ from pydantic import (
     Field,
     JsonValue,
     computed_field,
+    field_validator,
     model_validator,
 )
 
@@ -21,7 +22,7 @@ NombreHerramienta = Literal[
 
 FuenteRespuesta = Literal["xbrl", "texto", "ambas", "ninguna"]
 FamiliaPregunta = Literal["extractiva", "numerica", "comparativa"]
-VERSION_PROTOCOLO_CITAS = 2
+VERSION_PROTOCOLO_CITAS = 3
 
 
 class VeredictoCita(BaseModel):
@@ -104,6 +105,30 @@ class LlamadaHerramienta(BaseModel):
         return self.error is None
 
 
+class LlamadaModeloAuxiliar(BaseModel):
+    """Telemetría de una llamada a modelo ajena al bucle principal."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    componente: str = Field(min_length=1)
+    modelo: str = Field(min_length=1)
+    latencia_ms: float = Field(ge=0)
+    tokens_entrada: int | None = Field(default=None, ge=0)
+    tokens_salida: int | None = Field(default=None, ge=0)
+    coste_usd: float | None = Field(default=None, ge=0)
+    error: str | None = None
+
+    @field_validator("componente", "modelo", "error")
+    @classmethod
+    def normalizar_texto_auxiliar(cls, valor: str | None) -> str | None:
+        if valor is None:
+            return None
+        normalizado = valor.strip()
+        if not normalizado:
+            raise ValueError("El texto no puede estar vacío.")
+        return normalizado
+
+
 class RespuestaAgente(BaseModel):
     """Respuesta final y traza observable de una ejecución del agente."""
 
@@ -119,7 +144,14 @@ class RespuestaAgente(BaseModel):
         default_factory=tuple,
         description="Identificadores de los fragmentos citados por el agente.",
     )
+    cita: str | None = Field(
+        default=None,
+        description="Extracto textual que el agente atribuye al fragmento citado.",
+    )
     llamadas: tuple[LlamadaHerramienta, ...] = Field(default_factory=tuple)
+    llamadas_modelo_auxiliares: tuple[LlamadaModeloAuxiliar, ...] = Field(
+        default_factory=tuple,
+    )
     latencia_ms: float = Field(ge=0)
     coste_usd: float | None = Field(
         default=None,
@@ -129,6 +161,16 @@ class RespuestaAgente(BaseModel):
     tokens_entrada: int | None = Field(default=None, ge=0)
     tokens_salida: int | None = Field(default=None, ge=0)
     error: str | None = None
+
+    @field_validator("cita")
+    @classmethod
+    def normalizar_cita(cls, valor: str | None) -> str | None:
+        if valor is None:
+            return None
+        normalizado = valor.strip()
+        if not normalizado:
+            raise ValueError("cita debe contener texto o ser None.")
+        return normalizado
 
     @model_validator(mode="after")
     def validar_contenido(self) -> "RespuestaAgente":
@@ -209,7 +251,7 @@ class InformeEvaluacion(BaseModel):
     tolerancia_absoluta: float = Field(ge=0)
     tolerancia_relativa: float = Field(ge=0)
     metodo_soporte_citas: str = Field(default="no_especificado", min_length=1)
-    version_protocolo_citas: Literal[2] = VERSION_PROTOCOLO_CITAS
+    version_protocolo_citas: Literal[3] = VERSION_PROTOCOLO_CITAS
 
     @model_validator(mode="after")
     def validar_ids_unicos(self) -> "InformeEvaluacion":

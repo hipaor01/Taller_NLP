@@ -54,6 +54,32 @@ def caso_numerico() -> dict:
     }
 
 
+def caso_comparativo() -> dict:
+    inicio = TEXTO_2024.index(ANCLA_2024)
+    return {
+        "id": "comp-001",
+        "pregunta": (
+            "¿Cómo cambió el beneficio neto entre 2023 y 2024 y por qué?"
+        ),
+        "familia": "comparativa",
+        "ticker": "ACME",
+        "fiscal_year": 2024,
+        "respuesta_esperada": (
+            "Aumentó de 80 a 100 USD; las disrupciones afectaron las operaciones."
+        ),
+        "cifra_esperada": 100.0,
+        "unidad": "USD",
+        "concept_xbrl": "NetIncomeLoss",
+        "item_esperado": "1A",
+        "ancla_texto": ANCLA_2024,
+        "ancla_inicio": inicio,
+        "ancla_fin": inicio + len(ANCLA_2024),
+        "chunk_id_esperado": "ACME-2024-1A-0000",
+        "herramienta_esperada": ["get_xbrl_fact", "search_filings"],
+        "autor": "equipo",
+    }
+
+
 class TestCasoGolden(unittest.TestCase):
     def test_carga_jsonl_con_nombre_arbitrario_y_valida_offsets(self) -> None:
         with tempfile.TemporaryDirectory() as temporal:
@@ -94,6 +120,122 @@ class TestCasoGolden(unittest.TestCase):
 
 
 class TestEvaluadorFinanciero(unittest.TestCase):
+    def test_rechaza_cita_textual_que_no_aparece_en_el_chunk(self) -> None:
+        with tempfile.TemporaryDirectory() as temporal:
+            corpus, _ = crear_corpus_temporal(Path(temporal) / "corpus")
+            evaluador = EvaluadorFinanciero(corpus, lambda *_: True)
+            caso = CasoGolden.model_validate(caso_extractivo())
+            respuesta = RespuestaAgente(
+                respuesta="Las disrupciones pueden afectar las operaciones.",
+                fuente="texto",
+                citas=("ACME-2024-1A-0000",),
+                cita="Esta frase no aparece en el informe.",
+                latencia_ms=1,
+            )
+
+            cita_existe, cita_respalda, _, _ = evaluador._evaluar_citas(
+                caso,
+                respuesta,
+            )
+
+            self.assertTrue(cita_existe)
+            self.assertFalse(cita_respalda)
+
+    def test_tolerancia_relativa_acepta_redondeo_del_uno_por_ciento(self) -> None:
+        with tempfile.TemporaryDirectory() as temporal:
+            corpus, _ = crear_corpus_temporal(Path(temporal) / "corpus")
+            evaluador = EvaluadorFinanciero(
+                corpus,
+                lambda *_: True,
+                tolerancia_absoluta=0,
+                tolerancia_relativa=0.01,
+            )
+            caso = CasoGolden.model_validate(caso_numerico())
+
+            redondeada = RespuestaAgente(
+                respuesta="99.5 USD",
+                cifra=99.5,
+                unidad="USD",
+                fuente="xbrl",
+                latencia_ms=1,
+            )
+            incorrecta = redondeada.model_copy(
+                update={"respuesta": "98 USD", "cifra": 98}
+            )
+
+            self.assertTrue(evaluador._cifra_correcta(caso, redondeada))
+            self.assertFalse(evaluador._cifra_correcta(caso, incorrecta))
+
+    def test_comparativa_exige_dos_xbrl_y_una_busqueda_textual(self) -> None:
+        with tempfile.TemporaryDirectory() as temporal:
+            raiz = Path(temporal)
+            corpus, _ = crear_corpus_temporal(raiz / "corpus")
+            ruta = raiz / "comparativa.jsonl"
+            escribir_jsonl(ruta, [caso_comparativo()])
+            evaluador = EvaluadorFinanciero(corpus, lambda *_: True)
+
+            llamadas = tuple(
+                LlamadaHerramienta(
+                    id=f"xbrl-{ejercicio}",
+                    nombre="get_xbrl_fact",
+                    argumentos={
+                        "ticker": "ACME",
+                        "fiscal_year": ejercicio,
+                        "concept": "NetIncomeLoss",
+                    },
+                    duracion_ms=0,
+                    resultado=f"{valor} USD",
+                )
+                for ejercicio, valor in ((2023, 80), (2024, 100))
+            ) + (
+                LlamadaHerramienta(
+                    id="search-2024",
+                    nombre="search_filings",
+                    argumentos={
+                        "query": "operational disruption",
+                        "ticker": "ACME",
+                        "fiscal_year": 2024,
+                        "item": "1A",
+                        "k": 5,
+                    },
+                    duracion_ms=0,
+                    chunk_ids=("ACME-2024-1A-0000",),
+                    resultado=TEXTO_2024,
+                ),
+            )
+            respuesta = RespuestaAgente(
+                respuesta=(
+                    "Aumentó de 80 a 100 USD y hubo disrupciones operativas."
+                ),
+                cifra=100,
+                unidad="USD",
+                fuente="ambas",
+                citas=("ACME-2024-1A-0000",),
+                cita=ANCLA_2024,
+                llamadas=llamadas,
+                latencia_ms=1,
+            )
+
+            informe = evaluador.evaluar(
+                nombre_agente="agente-comparativo",
+                responder=lambda _: respuesta,
+                ruta_jsonl=ruta,
+            )
+
+            self.assertTrue(informe.resultados[0].trayectoria_correcta)
+
+            respuesta_incompleta = respuesta.model_copy(
+                update={"llamadas": llamadas[1:]}
+            )
+            informe_incompleto = evaluador.evaluar(
+                nombre_agente="agente-comparativo",
+                responder=lambda _: respuesta_incompleta,
+                ruta_jsonl=ruta,
+            )
+            self.assertFalse(
+                informe_incompleto.resultados[0].trayectoria_correcta
+            )
+
     def test_evalua_cifra_cita_trayectoria_recall_y_agregados(self) -> None:
         with tempfile.TemporaryDirectory() as temporal:
             raiz = Path(temporal)
@@ -138,6 +280,7 @@ class TestEvaluadorFinanciero(unittest.TestCase):
                         respuesta="Las disrupciones pueden dañar las operaciones.",
                         fuente="texto",
                         citas=("ACME-2024-1A-0000",),
+                        cita=f"  {ANCLA_2024.upper()}  ",
                         llamadas=(llamada,),
                         latencia_ms=10,
                         coste_usd=0.01,

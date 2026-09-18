@@ -41,9 +41,9 @@ _COLUMNAS_REQUERIDAS = frozenset(
 class RetrieverFaiss(Retriever):
     """Búsqueda densa sobre los artefactos FAISS de ``CorpusVariant``.
 
-    Reproduce el baseline de ``miax_s1.buscar``: codifica una consulta
-    normalizada, recupera el ranking global y aplica después los filtros de
-    compañía, ejercicio e item.
+    Puede ejecutar el ranking denso plano o aplicar después filtros de
+    compañía, ejercicio e item. La opción queda registrada entre los
+    parámetros del componente para que ambos experimentos sean distinguibles.
     """
 
     def __init__(
@@ -53,6 +53,7 @@ class RetrieverFaiss(Retriever):
         nombre: str = "faiss",
         codificador: _CodificadorEmbeddings | None = None,
         normalizar_embeddings: bool | None = None,
+        aplicar_filtros_metadatos: bool = True,
     ) -> None:
         if (
             corpus.ruta_indice_faiss is None
@@ -90,6 +91,7 @@ class RetrieverFaiss(Retriever):
             nombre,
             corpus,
             parametros={"normalizar_embeddings": normalizar_embeddings},
+            aplicar_filtros_metadatos=aplicar_filtros_metadatos,
         )
         self._normalizar_embeddings = normalizar_embeddings
         self._codificador = codificador
@@ -112,8 +114,16 @@ class RetrieverFaiss(Retriever):
         k: int,
     ) -> list[FragmentoRecuperado]:
         vector = self._codificar(query)
+        hay_filtros = any(
+            filtro is not None for filtro in (ticker, fiscal_year, item)
+        )
+        numero_candidatos = (
+            self._indice.ntotal
+            if self.aplica_filtros_metadatos and hay_filtros
+            else min(k, self._indice.ntotal)
+        )
         puntuaciones, posiciones = self._indice.search(
-            vector, self._indice.ntotal
+            vector, numero_candidatos
         )
 
         resultados = []
@@ -123,14 +133,23 @@ class RetrieverFaiss(Retriever):
             if posicion_indice < 0:
                 continue
             fila = self._metadatos.iloc[int(posicion_indice)]
-            if ticker is not None and fila["ticker"] != ticker:
+            if (
+                self.aplica_filtros_metadatos
+                and ticker is not None
+                and fila["ticker"] != ticker
+            ):
                 continue
             if (
-                fiscal_year is not None
+                self.aplica_filtros_metadatos
+                and fiscal_year is not None
                 and int(fila["fiscal_year"]) != fiscal_year
             ):
                 continue
-            if item is not None and fila["item"] != item:
+            if (
+                self.aplica_filtros_metadatos
+                and item is not None
+                and fila["item"] != item
+            ):
                 continue
 
             resultados.append(

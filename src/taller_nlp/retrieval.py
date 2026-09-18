@@ -47,7 +47,9 @@ class Retriever(ComponenteConfigurable, ABC):
 
     Las subclases solo implementan ``_buscar``. Este contrato normaliza la
     consulta y los filtros, valida el top-k y ofrece un formato estable para
-    la herramienta ``search_filings``.
+    la herramienta ``search_filings``. Cada implementación declara si aplica
+    los filtros de metadatos al ranking; esto permite medir separadamente el
+    denso plano y el mismo recuperador con filtrado posterior.
     """
 
     def __init__(
@@ -56,15 +58,33 @@ class Retriever(ComponenteConfigurable, ABC):
         corpus: CorpusVariant,
         *,
         parametros: Mapping[str, JsonValue] | None = None,
+        aplicar_filtros_metadatos: bool = True,
     ) -> None:
         if not isinstance(corpus, CorpusVariant):
             raise TypeError("corpus debe ser una instancia de CorpusVariant.")
-        super().__init__(nombre, parametros=parametros)
+        if not isinstance(aplicar_filtros_metadatos, bool):
+            raise TypeError("aplicar_filtros_metadatos debe ser bool.")
+        parametros_retriever = dict(parametros or {})
+        if "aplicar_filtros_metadatos" in parametros_retriever:
+            raise ValueError(
+                "aplicar_filtros_metadatos es un parámetro reservado del "
+                "Retriever."
+            )
+        parametros_retriever["aplicar_filtros_metadatos"] = (
+            aplicar_filtros_metadatos
+        )
+        super().__init__(nombre, parametros=parametros_retriever)
         self._corpus = corpus
+        self._aplica_filtros_metadatos = aplicar_filtros_metadatos
 
     @property
     def corpus(self) -> CorpusVariant:
         return self._corpus
+
+    @property
+    def aplica_filtros_metadatos(self) -> bool:
+        """Indica si ticker, ejercicio e item restringen los resultados."""
+        return self._aplica_filtros_metadatos
 
     def buscar(
         self,
@@ -93,6 +113,7 @@ class Retriever(ComponenteConfigurable, ABC):
             fiscal_year=fiscal_year,
             item=item,
             k=k,
+            comprobar_filtros=self._aplica_filtros_metadatos,
         )
         return fragmentos
 
@@ -193,6 +214,7 @@ class Retriever(ComponenteConfigurable, ABC):
         fiscal_year: int | None,
         item: str | None,
         k: int,
+        comprobar_filtros: bool = True,
     ) -> None:
         if len(fragmentos) > k:
             raise ValueError(
@@ -209,6 +231,9 @@ class Retriever(ComponenteConfigurable, ABC):
         ids = [fragmento.chunk_id for fragmento in fragmentos]
         if len(ids) != len(set(ids)):
             raise ValueError("El retriever devolvió chunk_id duplicados.")
+
+        if not comprobar_filtros:
+            return
 
         for fragmento in fragmentos:
             if ticker is not None and fragmento.ticker != ticker:

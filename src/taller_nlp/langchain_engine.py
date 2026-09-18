@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import json
 from collections.abc import Sequence
+from dataclasses import dataclass
 from time import perf_counter
 from typing import Any
+from uuid import uuid4
 
 from langchain.agents import create_agent
 from langchain.agents.middleware import (
@@ -17,8 +19,16 @@ from langchain.agents.middleware.types import ToolCallRequest
 from langchain.agents.structured_output import ToolStrategy
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import AIMessage, BaseMessage, ToolMessage
+from langgraph.checkpoint.base import BaseCheckpointSaver
+
+from .auxiliary_telemetry import RegistroTelemetriaAuxiliar
 from .config import ConfiguracionAgente
-from .contracts import LlamadaHerramienta, RespuestaAgente, RespuestaFinanciera
+from .contracts import (
+    LlamadaHerramienta,
+    LlamadaModeloAuxiliar,
+    RespuestaAgente,
+    RespuestaFinanciera,
+)
 from .corpus import CorpusVariant
 from .model_factory import crear_modelo_chat
 from .model_resilience import (
@@ -31,6 +41,26 @@ from .tool_suite import ToolSuite
 
 
 _MAX_CARACTERES_RESULTADO = 4_000
+
+
+@dataclass(frozen=True, slots=True)
+class EjecucionLangChain:
+    """Estado crudo y telemetría de una invocación del grafo."""
+
+    estado: dict[str, Any]
+    latencia_ms: float
+    coste_usd: float | None
+    tokens_entrada: int | None
+    tokens_salida: int | None
+    llamadas_modelo_auxiliares: tuple[LlamadaModeloAuxiliar, ...] = ()
+    coste_modelo_principal_usd: float | None = None
+    tokens_entrada_modelo_principal: int | None = None
+    tokens_salida_modelo_principal: int | None = None
+
+    @property
+    def latencia_s(self) -> float:
+        """Latencia total expresada en segundos."""
+        return self.latencia_ms / 1_000
 
 
 class _ToolTimingMiddleware(AgentMiddleware):
@@ -60,6 +90,8 @@ class MotorLangChain:
         middlewares: Sequence[AgentMiddleware] = (),
         modelo: BaseChatModel | None = None,
         control_peticiones: ControlPeticionesModelo | None = None,
+        checkpointer: BaseCheckpointSaver | None = None,
+        telemetria_auxiliar: RegistroTelemetriaAuxiliar | None = None,
     ) -> None:
         self._configuracion = configuracion
         self._herramientas = herramientas
@@ -68,6 +100,8 @@ class MotorLangChain:
         self._control_peticiones = control_peticiones or (
             ControlPeticionesModelo.desde_configuracion(configuracion)
         )
+        self._checkpointer = checkpointer
+        self._telemetria_auxiliar = telemetria_auxiliar
 
         modelo_langchain = modelo or self._crear_modelo(
             configuracion, self._control_peticiones
@@ -80,6 +114,7 @@ class MotorLangChain:
             middleware=middlewares_agente,
             response_format=ToolStrategy(RespuestaFinanciera),
             name="agente_financiero",
+            checkpointer=checkpointer,
         )
         # LangGraph aplica este timeout a cada superstep. Los límites de llamadas
         # acotan además el número máximo de supersteps de una ejecución.
@@ -146,22 +181,139 @@ class MotorLangChain:
     def corpus(self) -> CorpusVariant:
         return self._corpus
 
-    def responder(self, pregunta: str) -> RespuestaAgente:
-        """Ejecuta el grafo y transforma su estado al contrato compartido."""
+    @property
+    def checkpointer(self) -> BaseCheckpointSaver | None:
+        return self._checkpointer
+
+    @property
+    def telemetria_auxiliar(self) -> RegistroTelemetriaAuxiliar | None:
+        return self._telemetria_auxiliar
+
+    def ejecutar(
+        self,
+        pregunta: str,
+        *,
+        thread_id: str | None = None,
+    ) -> EjecucionLangChain:
+        """Ejecuta el grafo conservando íntegro el estado que devuelve."""
+        if thread_id is not None and not isinstance(thread_id, str):
+            raise TypeError("thread_id debe ser texto o None.")
+        thread_id_normalizado = thread_id.strip() if thread_id is not None else None
+        if thread_id is not None and not thread_id_normalizado:
+            raise ValueError("thread_id no puede estar vacío.")
+
+        configuracion: dict[str, Any] = {
+            "recursion_limit": max(
+                50, self._configuracion.max_iteraciones * 8
+            ),
+            "metadata": {"corpus_variant": self._corpus.nombre},
+        }
+        if thread_id_normalizado is not None:
+            configuracion["configurable"] = {
+                "thread_id": thread_id_normalizado,
+            }
+        elif self._checkpointer is not None:
+            # Mantiene independientes las llamadas que no solicitan memoria.
+            configuracion["configurable"] = {"thread_id": uuid4().hex}
+
         inicio = perf_counter()
-        estado = self._agente.invoke(
-            {"messages": [{"role": "user", "content": pregunta}]},
-            config={
-                "recursion_limit": max(
-                    50, self._configuracion.max_iteraciones * 8
-                ),
-                "metadata": {"corpus_variant": self._corpus.nombre},
-            },
-        )
+        telemetria_auxiliar = getattr(self, "_telemetria_auxiliar", None)
+        if telemetria_auxiliar is None:
+            estado = self._invocar_grafo(pregunta, configuracion)
+            llamadas_auxiliares: tuple[LlamadaModeloAuxiliar, ...] = ()
+        else:
+            with telemetria_auxiliar.capturar() as captura:
+                estado = self._invocar_grafo(pregunta, configuracion)
+            llamadas_auxiliares = captura.llamadas
+        if not isinstance(estado, dict):
+            raise TypeError("El grafo debe devolver su estado como un dict.")
         latencia_ms = (perf_counter() - inicio) * 1_000
         mensajes = estado.get("messages", ())
+        entrada_principal, salida_principal, coste_principal = self._extraer_uso(
+            mensajes
+        )
+        if coste_principal is None:
+            coste_principal = self._estimar_coste(
+                entrada_principal,
+                salida_principal,
+            )
+        tokens_entrada = self._sumar_telemetria(
+            entrada_principal,
+            llamadas_auxiliares,
+            "tokens_entrada",
+        )
+        tokens_salida = self._sumar_telemetria(
+            salida_principal,
+            llamadas_auxiliares,
+            "tokens_salida",
+        )
+        coste_usd = self._sumar_telemetria(
+            coste_principal,
+            llamadas_auxiliares,
+            "coste_usd",
+        )
+        return EjecucionLangChain(
+            estado=estado,
+            latencia_ms=latencia_ms,
+            coste_usd=coste_usd,
+            tokens_entrada=tokens_entrada,
+            tokens_salida=tokens_salida,
+            llamadas_modelo_auxiliares=llamadas_auxiliares,
+            coste_modelo_principal_usd=coste_principal,
+            tokens_entrada_modelo_principal=entrada_principal,
+            tokens_salida_modelo_principal=salida_principal,
+        )
+
+    def _invocar_grafo(
+        self,
+        pregunta: str,
+        configuracion: dict[str, Any],
+    ) -> dict[str, Any]:
+        return self._agente.invoke(
+            {"messages": [{"role": "user", "content": pregunta}]},
+            config=configuracion,
+        )
+
+    @staticmethod
+    def _sumar_telemetria(
+        principal: int | float | None,
+        llamadas: Sequence[LlamadaModeloAuxiliar],
+        campo: str,
+    ) -> int | float | None:
+        """Suma un campo solo cuando todas las mediciones están disponibles."""
+        if not llamadas:
+            return principal
+        auxiliares = [getattr(llamada, campo) for llamada in llamadas]
+        if principal is None or any(valor is None for valor in auxiliares):
+            return None
+        return principal + sum(auxiliares)
+
+    def _estimar_coste(
+        self,
+        tokens_entrada: int | None,
+        tokens_salida: int | None,
+    ) -> float | None:
+        """Estima el coste con tarifas declaradas si el proveedor no lo dio."""
+        precio_entrada = self._configuracion.precio_entrada_usd_millon_tokens
+        precio_salida = self._configuracion.precio_salida_usd_millon_tokens
+        if (
+            tokens_entrada is None
+            or tokens_salida is None
+            or precio_entrada is None
+            or precio_salida is None
+        ):
+            return None
+        return (
+            tokens_entrada * precio_entrada
+            + tokens_salida * precio_salida
+        ) / 1_000_000
+
+    def responder(self, pregunta: str) -> RespuestaAgente:
+        """Ejecuta el grafo y transforma su estado al contrato compartido."""
+        ejecucion = self.ejecutar(pregunta)
+        estado = ejecucion.estado
+        mensajes = estado.get("messages", ())
         llamadas = self._extraer_llamadas(mensajes)
-        tokens_entrada, tokens_salida, coste_usd = self._extraer_uso(mensajes)
         salida = estado.get("structured_response")
 
         if not isinstance(salida, RespuestaFinanciera):
@@ -170,10 +322,13 @@ class MotorLangChain:
                 respuesta=texto_final,
                 fuente="ninguna",
                 llamadas=llamadas,
-                latencia_ms=latencia_ms,
-                coste_usd=coste_usd,
-                tokens_entrada=tokens_entrada,
-                tokens_salida=tokens_salida,
+                llamadas_modelo_auxiliares=(
+                    ejecucion.llamadas_modelo_auxiliares
+                ),
+                latencia_ms=ejecucion.latencia_ms,
+                coste_usd=ejecucion.coste_usd,
+                tokens_entrada=ejecucion.tokens_entrada,
+                tokens_salida=ejecucion.tokens_salida,
                 error="El agente terminó sin una respuesta estructurada.",
             )
 
@@ -183,11 +338,17 @@ class MotorLangChain:
             unidad=salida.unidad,
             fuente=salida.fuente,
             citas=(salida.chunk_id,) if salida.chunk_id else (),
+            cita=(
+                salida.cita.strip()
+                if salida.cita is not None and salida.cita.strip()
+                else None
+            ),
             llamadas=llamadas,
-            latencia_ms=latencia_ms,
-            coste_usd=coste_usd,
-            tokens_entrada=tokens_entrada,
-            tokens_salida=tokens_salida,
+            llamadas_modelo_auxiliares=ejecucion.llamadas_modelo_auxiliares,
+            latencia_ms=ejecucion.latencia_ms,
+            coste_usd=ejecucion.coste_usd,
+            tokens_entrada=ejecucion.tokens_entrada,
+            tokens_salida=ejecucion.tokens_salida,
         )
 
     @classmethod

@@ -1,6 +1,10 @@
 """Componentes reutilizables del agente financiero."""
 
 from .agent import AgenteFinanciero, EvaluadorAgente, MotorAgente
+from .auxiliary_telemetry import (
+    CapturaTelemetriaAuxiliar,
+    RegistroTelemetriaAuxiliar,
+)
 from .assembly import ConstructorAgente
 from .config import ConfiguracionAgente
 from .console_progress import ProgresoConsolaMiddleware
@@ -10,6 +14,7 @@ from .corpus_builder import ConstructorCorpusVariant
 from .contracts import (
     InformeEvaluacion,
     LlamadaHerramienta,
+    LlamadaModeloAuxiliar,
     RespuestaAgente,
     RespuestaFinanciera,
     ResultadoPregunta,
@@ -19,7 +24,7 @@ from .contracts import (
 from .tool_suite import ToolSuite
 from .tool_factory import FabricaHerramientas
 from .retrieval import FragmentoRecuperado, Retriever
-from .langchain_engine import MotorLangChain
+from .langchain_engine import EjecucionLangChain, MotorLangChain
 from .golden import CasoGolden
 from .indexing import ArchivoArtefacto, ArtefactosIndice, IndexadorCorpus
 from .evaluation import EvaluadorFinanciero, JuezCitas
@@ -42,6 +47,7 @@ __all__ = [
     "ArchivoArtefacto",
     "ArtefactosIndice",
     "ConfiguracionAgente",
+    "CapturaTelemetriaAuxiliar",
     "ControlPeticionesModelo",
     "ContextoProgreso",
     "ErrorProveedorAgotadoError",
@@ -53,6 +59,7 @@ __all__ = [
     "CasoGolden",
     "EvaluadorAgente",
     "EvaluadorFinanciero",
+    "EjecucionLangChain",
     "DescriptorComponente",
     "FabricaHerramientas",
     "FragmentoCorpus",
@@ -60,6 +67,7 @@ __all__ = [
     "InformeEvaluacion",
     "IndexadorCorpus",
     "LlamadaHerramienta",
+    "LlamadaModeloAuxiliar",
     "LimpiarRazonamientoOpenRouterMiddleware",
     "JuezCitas",
     "JuezCitasLangChain",
@@ -69,6 +77,7 @@ __all__ = [
     "ProgresoConsolaMiddleware",
     "RespuestaAgente",
     "RespuestaFinanciera",
+    "RegistroTelemetriaAuxiliar",
     "RateLimitAgotadoError",
     "ReintentoRateLimitMiddleware",
     "Retriever",

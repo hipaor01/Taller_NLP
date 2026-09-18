@@ -31,6 +31,7 @@ from taller_nlp import (
     JuezCitasLangChain,
     ManifiestoExperimento,
     ProgresoConsolaMiddleware,
+    RegistroTelemetriaAuxiliar,
     RetrieverFaiss,
     VERSION_PROTOCOLO_CITAS,
 )
@@ -46,6 +47,16 @@ MODELO_AGENTE = os.getenv(
     "openrouter:google/gemini-3.8-flash",
 )
 MODELO_JUEZ = os.getenv("TALLER_MODELO_JUEZ", MODELO_AGENTE)
+
+# Tarifas docentes fijadas en el notebook S2 (USD por millón de tokens).
+# Para un modelo no incluido se conserva coste=None antes que estimar con una
+# tarifa que no le corresponde.
+PRECIOS_MODELOS: dict[str, tuple[float, float]] = {
+    "openrouter:google/gemini-3.5-flash-lite": (0.30, 2.50),
+    "openrouter:google/gemini-3.8-flash": (0.75, 3.75),
+    "openrouter:anthropic/claude-opus-5": (5.00, 25.00),
+    "openrouter:anthropic/claude-fable-5.1": (10.00, 50.00),
+}
 
 SYSTEM_PROMPT = """Eres un analista financiero que responde preguntas sobre informes
 10-K usando ÚNICAMENTE las herramientas disponibles.
@@ -93,10 +104,13 @@ def crear_corpus_baseline() -> CorpusVariant:
 
 def crear_configuracion_baseline() -> ConfiguracionAgente:
     """Conserva modelo y prompt del notebook y añade límites de seguridad."""
+    precios = PRECIOS_MODELOS.get(MODELO_AGENTE)
     return ConfiguracionAgente(
         modelo=MODELO_AGENTE,
         system_prompt=SYSTEM_PROMPT,
         temperatura=0,
+        precio_entrada_usd_millon_tokens=precios[0] if precios else None,
+        precio_salida_usd_millon_tokens=precios[1] if precios else None,
         max_iteraciones=6,
         max_llamadas_total=24,
         limites_por_herramienta={},
@@ -113,10 +127,11 @@ def crear_configuracion_baseline() -> ConfiguracionAgente:
 
 
 def crear_retriever_baseline(corpus: CorpusVariant) -> RetrieverFaiss:
-    """Reproduce la búsqueda FAISS de ``miax_s1.buscar``."""
+    """Reproduce el denso plano, sin el arreglo de metadatos de S2."""
     return RetrieverFaiss(
         corpus,
         nombre="faiss-baseline-s1",
+        aplicar_filtros_metadatos=False,
     )
 
 
@@ -134,6 +149,7 @@ def crear_constructor_baseline(
     middlewares: Sequence[AgentMiddleware] = (),
     modelo: BaseChatModel | None = None,
     control_peticiones: ControlPeticionesModelo | None = None,
+    telemetria_auxiliar: RegistroTelemetriaAuxiliar | None = None,
     ruta_progreso: str | Path | None = None,
 ) -> ConstructorAgente:
     """Ensambla el baseline permitiendo inyectar dobles en tests."""
@@ -158,9 +174,10 @@ def crear_constructor_baseline(
         middlewares=middlewares,
         modelo=modelo,
         control_peticiones=control,
+        telemetria_auxiliar=telemetria_auxiliar,
         k_retrieval=5,
-        tolerancia_absoluta=1.0,
-        tolerancia_relativa=1e-6,
+        tolerancia_absoluta=0.0,
+        tolerancia_relativa=0.01,
         # Se deja abierto para poder usar tanto las 20 preguntas propias como
         # las 10 preguntas ciegas sin construir otro agente.
         numero_esperado=None,
@@ -169,12 +186,18 @@ def crear_constructor_baseline(
     )
 
 
+def crear_constructor() -> ConstructorAgente:
+    """Factoría común usada por la interfaz configurable del notebook."""
+    return crear_constructor_baseline()
+
+
 def crear_agente_baseline(
     *,
     juez_citas: JuezCitas | None = None,
     middlewares: Sequence[AgentMiddleware] = (),
     modelo: BaseChatModel | None = None,
     control_peticiones: ControlPeticionesModelo | None = None,
+    telemetria_auxiliar: RegistroTelemetriaAuxiliar | None = None,
     ruta_progreso: str | Path | None = None,
 ) -> tuple[ConstructorAgente, AgenteFinanciero]:
     """Devuelve constructor y fachada para responder o evaluar."""
@@ -183,6 +206,7 @@ def crear_agente_baseline(
         middlewares=middlewares,
         modelo=modelo,
         control_peticiones=control_peticiones,
+        telemetria_auxiliar=telemetria_auxiliar,
         ruta_progreso=ruta_progreso,
     )
     return constructor, constructor.construir()

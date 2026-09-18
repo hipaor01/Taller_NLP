@@ -61,6 +61,11 @@ class TestContratosRespuesta(unittest.TestCase):
         )
         self.assertIsNone(respuesta(tokens_entrada=7).tokens_totales)
 
+    def test_normaliza_cita_textual_y_rechaza_la_vacia(self) -> None:
+        self.assertEqual(respuesta(cita="  texto citado  ").cita, "texto citado")
+        with self.assertRaisesRegex(ValidationError, "cita"):
+            respuesta(cita="   ")
+
 
 class TestResultadosEInforme(unittest.TestCase):
     def test_acierto_exige_todos_los_criterios_de_su_familia(self) -> None:
@@ -143,6 +148,14 @@ class TestResultadosEInforme(unittest.TestCase):
 
 
 class TestConfiguracion(unittest.TestCase):
+    def test_exige_declarar_juntas_las_tarifas_de_tokens(self) -> None:
+        with self.assertRaisesRegex(ValidationError, "tarifas"):
+            ConfiguracionAgente(
+                modelo="modelo",
+                system_prompt="prompt",
+                precio_entrada_usd_millon_tokens=0.5,
+            )
+
     def test_normaliza_texto_y_acepta_limite_cero_por_tool(self) -> None:
         config = ConfiguracionAgente(
             modelo=" modelo ",

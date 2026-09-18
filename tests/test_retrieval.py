@@ -59,7 +59,10 @@ class TestRetrieverFaiss(unittest.TestCase):
             retriever = RetrieverFaiss(corpus, codificador=codificador)
             self.assertEqual(
                 dict(retriever.parametros),
-                {"normalizar_embeddings": True},
+                {
+                    "normalizar_embeddings": True,
+                    "aplicar_filtros_metadatos": True,
+                },
             )
 
             resultados = retriever.buscar("riesgo", k=2)
@@ -71,6 +74,24 @@ class TestRetrieverFaiss(unittest.TestCase):
             self.assertTrue(codificador.llamadas[0][1])
             filtrado = retriever.buscar("riesgo", fiscal_year=2023, k=1)
             self.assertEqual(filtrado[0].fiscal_year, 2023)
+
+    def test_puede_desactivar_filtros_para_medir_denso_plano(self) -> None:
+        with tempfile.TemporaryDirectory() as temporal:
+            corpus, _ = crear_corpus_temporal(Path(temporal), con_faiss=True)
+            retriever = RetrieverFaiss(
+                corpus,
+                codificador=CodificadorControlado([1.0, 0.0]),
+                aplicar_filtros_metadatos=False,
+            )
+
+            resultados = retriever.buscar(
+                "riesgo",
+                fiscal_year=2023,
+                k=1,
+            )
+
+            self.assertFalse(retriever.aplica_filtros_metadatos)
+            self.assertEqual(resultados[0].fiscal_year, 2024)
 
     def test_rechaza_vector_de_dimension_incorrecta(self) -> None:
         with tempfile.TemporaryDirectory() as temporal:

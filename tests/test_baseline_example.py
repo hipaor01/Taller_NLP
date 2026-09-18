@@ -1,15 +1,18 @@
 from __future__ import annotations
 
 import io
+import os
 import unittest
 from contextlib import redirect_stderr
 from types import SimpleNamespace
+from unittest.mock import patch
 
 import faiss
 
 from experimentos.baseline import (
     MODELO_AGENTE,
     SYSTEM_PROMPT,
+    crear_constructor,
     crear_configuracion_baseline,
     crear_constructor_baseline,
     crear_corpus_baseline,
@@ -18,6 +21,11 @@ from taller_nlp import ProgresoConsolaMiddleware
 
 
 class TestEjemploBaseline(unittest.TestCase):
+    def test_expone_la_factoria_comun_de_variantes(self) -> None:
+        with patch.dict(os.environ, {"OPENROUTER_API_KEY": "dummy"}):
+            constructor = crear_constructor()
+        self.assertEqual(constructor.nombre, "baseline-notebook-s1")
+
     def test_declara_y_valida_los_artefactos_docentes(self) -> None:
         corpus = crear_corpus_baseline()
         self.assertEqual(corpus.nombre, "baseline-notebook-s1")
@@ -33,6 +41,14 @@ class TestEjemploBaseline(unittest.TestCase):
         self.assertIn("Cita el chunk_id", configuracion.system_prompt)
         self.assertEqual(configuracion.max_iteraciones, 6)
         self.assertEqual(configuracion.timeout_s, 60)
+        self.assertEqual(
+            configuracion.precio_entrada_usd_millon_tokens,
+            0.75,
+        )
+        self.assertEqual(
+            configuracion.precio_salida_usd_millon_tokens,
+            3.75,
+        )
         self.assertEqual(configuracion.solicitudes_modelo_por_minuto, 18)
         self.assertEqual(configuracion.max_reintentos_rate_limit, 3)
 
@@ -45,7 +61,19 @@ class TestEjemploBaseline(unittest.TestCase):
         )
         self.assertEqual(
             dict(constructor.fabrica_herramientas.retriever.parametros),
-            {"normalizar_embeddings": True},
+            {
+                "normalizar_embeddings": True,
+                "aplicar_filtros_metadatos": False,
+            },
+        )
+        self.assertFalse(
+            constructor.fabrica_herramientas.retriever.aplica_filtros_metadatos
+        )
+        self.assertEqual(constructor.evaluador.tolerancia_absoluta, 0)
+        self.assertEqual(constructor.evaluador.tolerancia_relativa, 0.01)
+        self.assertIn(
+            "no restringen el ranking denso",
+            constructor.fabrica_herramientas.descripciones["search_filings"],
         )
 
     def test_middleware_hace_visibles_modelo_y_tool(self) -> None:
