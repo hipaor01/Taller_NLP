@@ -87,6 +87,21 @@ python -m agente \
   --salida resultados/resumen_baseline.csv
 ```
 
+Una ejecución ya guardada como manifiesto puede promocionarse a `resultados/`
+sin volver a llamar al agente. El CSV detallado y su resumen se derivan del
+mismo `InformeEvaluacion`, por lo que representan exactamente la misma
+ejecución:
+
+```bash
+python -m agente \
+  --desde-manifiesto experimentos/resultados/baseline_20260919T071446Z.json \
+  --salida resultados/baseline.csv \
+  --resumen resultados/resumen_baseline.csv
+```
+
+La etiqueta del resumen se deduce de `--salida` (`baseline` en el ejemplo).
+Puede sustituirse con `--etiqueta`.
+
 Para ejecutar otra variante sin modificar código:
 
 ```bash

@@ -122,6 +122,27 @@ def resumir(tabla: pd.DataFrame, etiqueta: str) -> dict[str, float | str]:
     }
 
 
+def tabla_desde_manifiesto(
+    ruta_manifiesto: str | Path,
+) -> pd.DataFrame:
+    """Recupera la tabla ya evaluada sin volver a ejecutar el agente."""
+    from taller_nlp import CasoGolden, ManifiestoExperimento
+
+    manifiesto = ManifiestoExperimento.cargar(ruta_manifiesto)
+    informe = manifiesto.informe
+    if informe is None:
+        raise ValueError("El manifiesto no contiene un informe de evaluación.")
+
+    ruta_golden = Path(informe.ruta_jsonl)
+    casos = CasoGolden.cargar_jsonl(
+        ruta_golden,
+        manifiesto.corpus,
+        numero_esperado=manifiesto.numero_esperado,
+        minimo_comparativas=manifiesto.minimo_comparativas,
+    )
+    return _informe_a_dataframe(informe, casos)
+
+
 def _crear_constructor_configurado() -> ConstructorAgente:
     """Carga la factoría común de la variante seleccionada por el entorno."""
     nombre_modulo = os.getenv(VARIABLE_VARIANTE, MODULO_BASELINE).strip()

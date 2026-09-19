@@ -123,6 +123,64 @@ class TestCliAgente(unittest.TestCase):
                     )
         self.assertEqual(contexto.exception.code, 2)
 
+    def test_exporta_manifiesto_a_detalle_y_resumen_sin_evaluar(self) -> None:
+        with tempfile.TemporaryDirectory() as temporal:
+            raiz = Path(temporal)
+            manifiesto = raiz / "baseline_20260919.json"
+            manifiesto.write_text("{}\n", encoding="utf-8")
+            salida = raiz / "resultados" / "baseline.csv"
+            resumen = raiz / "resultados" / "resumen_baseline.csv"
+            tabla = pd.DataFrame(
+                {
+                    "id": ["q1", "q2"],
+                    "cita": [True, False],
+                    "trayectoria": [True, True],
+                    "coste_usd": [0.01, 0.03],
+                    "latencia_s": [1.0, 3.0],
+                    "llamadas": [2, 4],
+                }
+            )
+            stdout = io.StringIO()
+            stderr = io.StringIO()
+
+            with patch(
+                "agente.__main__.tabla_desde_manifiesto",
+                return_value=tabla,
+            ) as cargar_mock:
+                with redirect_stdout(stdout), redirect_stderr(stderr):
+                    codigo = main(
+                        [
+                            "--desde-manifiesto",
+                            str(manifiesto),
+                            "--salida",
+                            str(salida),
+                            "--resumen",
+                            str(resumen),
+                        ]
+                    )
+
+            self.assertEqual(codigo, 0)
+            cargar_mock.assert_called_once_with(manifiesto)
+            self.assertEqual(pd.read_csv(salida)["id"].tolist(), ["q1", "q2"])
+            fila_resumen = pd.read_csv(resumen).iloc[0]
+            self.assertEqual(fila_resumen["versión"], "baseline")
+            self.assertEqual(fila_resumen["cita"], 0.5)
+            self.assertEqual(fila_resumen["trayectoria"], 1.0)
+            self.assertIn("Resumen:", stdout.getvalue())
+            self.assertIn(str(salida.resolve()), stderr.getvalue())
+            self.assertIn(str(resumen.resolve()), stderr.getvalue())
+
+    def test_exportar_manifiesto_exige_las_dos_salidas(self) -> None:
+        with tempfile.TemporaryDirectory() as temporal:
+            manifiesto = Path(temporal) / "experimento.json"
+            manifiesto.write_text("{}\n", encoding="utf-8")
+
+            with redirect_stderr(io.StringIO()):
+                with self.assertRaises(SystemExit) as contexto:
+                    main(["--desde-manifiesto", str(manifiesto)])
+
+            self.assertEqual(contexto.exception.code, 2)
+
 
 if __name__ == "__main__":
     unittest.main()
