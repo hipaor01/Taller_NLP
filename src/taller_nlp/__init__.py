@@ -29,6 +29,8 @@ from .indexing import ArchivoArtefacto, ArtefactosIndice, IndexadorCorpus
 from .evaluation import EvaluadorFinanciero
 from .experiment import DescriptorComponente, ManifiestoExperimento
 from .faiss_retriever import RetrieverFaiss
+from .hybrid_retriever import RetrieverHibridoRRF
+from .query_rewriter import ReescritorConsultaLLM, RetrieverConReescritura
 from .model_resilience import (
     ControlPeticionesModelo,
     ErrorProveedorAgotadoError,
@@ -76,8 +78,11 @@ __all__ = [
     "RegistroTelemetriaAuxiliar",
     "RateLimitAgotadoError",
     "ReintentoRateLimitMiddleware",
+    "ReescritorConsultaLLM",
     "Retriever",
+    "RetrieverConReescritura",
     "RetrieverFaiss",
+    "RetrieverHibridoRRF",
     "ResultadoPregunta",
     "ToolSuite",
     "TroceadorCorpus",

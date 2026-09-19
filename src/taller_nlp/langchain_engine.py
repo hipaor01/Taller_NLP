@@ -31,6 +31,7 @@ from .contracts import (
 )
 from .corpus import CorpusVariant
 from .model_factory import crear_modelo_chat
+from .model_usage import estimar_coste_modelo, extraer_uso_modelo
 from .model_resilience import (
     ControlPeticionesModelo,
     LimpiarRazonamientoOpenRouterMiddleware,
@@ -294,19 +295,12 @@ class MotorLangChain:
         tokens_salida: int | None,
     ) -> float | None:
         """Estima el coste con tarifas declaradas si el proveedor no lo dio."""
-        precio_entrada = self._configuracion.precio_entrada_usd_millon_tokens
-        precio_salida = self._configuracion.precio_salida_usd_millon_tokens
-        if (
-            tokens_entrada is None
-            or tokens_salida is None
-            or precio_entrada is None
-            or precio_salida is None
-        ):
-            return None
-        return (
-            tokens_entrada * precio_entrada
-            + tokens_salida * precio_salida
-        ) / 1_000_000
+        return estimar_coste_modelo(
+            tokens_entrada,
+            tokens_salida,
+            self._configuracion.precio_entrada_usd_millon_tokens,
+            self._configuracion.precio_salida_usd_millon_tokens,
+        )
 
     def responder(self, pregunta: str) -> RespuestaAgente:
         """Ejecuta el grafo y transforma su estado al contrato compartido."""
@@ -417,28 +411,7 @@ class MotorLangChain:
     def _extraer_uso(
         mensajes: Sequence[BaseMessage],
     ) -> tuple[int | None, int | None, float | None]:
-        entrada = 0
-        salida = 0
-        coste = 0.0
-        hay_tokens = False
-        hay_coste = False
-        for mensaje in mensajes:
-            if not isinstance(mensaje, AIMessage):
-                continue
-            uso = mensaje.usage_metadata
-            if uso:
-                entrada += int(uso.get("input_tokens", 0))
-                salida += int(uso.get("output_tokens", 0))
-                hay_tokens = True
-            coste_mensaje = mensaje.response_metadata.get("cost")
-            if coste_mensaje is not None:
-                coste += float(coste_mensaje)
-                hay_coste = True
-        return (
-            entrada if hay_tokens else None,
-            salida if hay_tokens else None,
-            coste if hay_coste else None,
-        )
+        return extraer_uso_modelo(mensajes)
 
     @staticmethod
     def _contenido_como_texto(contenido: Any) -> str:
