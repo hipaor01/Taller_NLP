@@ -76,7 +76,8 @@ class TestResultadosEInforme(unittest.TestCase):
             cita_existe=True,
             cita_respalda=True,
             trayectoria_correcta=True,
-            recall_at_k=1,
+            # recall@k se informa aparte y no condiciona los tres evaluadores.
+            recall_at_k=0,
         )
         numerica = ResultadoPregunta(
             id_pregunta="q2",

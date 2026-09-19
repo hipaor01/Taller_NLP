@@ -38,7 +38,7 @@ class ConfiguracionAgente(BaseModel):
         default=None,
         gt=0,
         description=(
-            "Límite cliente compartido por agente y juez; None lo desactiva."
+            "Límite cliente para las llamadas del agente; None lo desactiva."
         ),
     )
     max_reintentos_rate_limit: int = Field(default=3, ge=0)

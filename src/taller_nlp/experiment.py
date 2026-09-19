@@ -137,7 +137,7 @@ class ManifiestoExperimento(BaseModel):
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    version_esquema: Literal[1] = 1
+    version_esquema: Literal[2] = 2
     nombre_experimento: str = Field(min_length=1)
     creado_utc: datetime
     revision_codigo: str | None = None
@@ -162,7 +162,6 @@ class ManifiestoExperimento(BaseModel):
     descripciones_herramientas: dict[NombreHerramienta, str]
     retriever: DescriptorComponente | None = None
     middlewares_usuario: tuple[DescriptorComponente, ...] = ()
-    juez_citas: DescriptorComponente
     modelo_inyectado: DescriptorComponente | None = None
 
     k_retrieval: int = Field(gt=0)
@@ -325,7 +324,6 @@ class ManifiestoExperimento(BaseModel):
                 cls._describir(middleware)
                 for middleware in constructor.middlewares
             ),
-            juez_citas=cls._describir(constructor.juez_citas),
             modelo_inyectado=(
                 cls._describir(constructor.modelo)
                 if constructor.modelo is not None

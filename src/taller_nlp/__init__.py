@@ -19,7 +19,6 @@ from .contracts import (
     RespuestaFinanciera,
     ResultadoPregunta,
     VERSION_PROTOCOLO_CITAS,
-    VeredictoCita,
 )
 from .tool_suite import ToolSuite
 from .tool_factory import FabricaHerramientas
@@ -27,10 +26,9 @@ from .retrieval import FragmentoRecuperado, Retriever
 from .langchain_engine import EjecucionLangChain, MotorLangChain
 from .golden import CasoGolden
 from .indexing import ArchivoArtefacto, ArtefactosIndice, IndexadorCorpus
-from .evaluation import EvaluadorFinanciero, JuezCitas
+from .evaluation import EvaluadorFinanciero
 from .experiment import DescriptorComponente, ManifiestoExperimento
 from .faiss_retriever import RetrieverFaiss
-from .citation_judge import JuezCitasLangChain
 from .model_resilience import (
     ControlPeticionesModelo,
     ErrorProveedorAgotadoError,
@@ -69,8 +67,6 @@ __all__ = [
     "LlamadaHerramienta",
     "LlamadaModeloAuxiliar",
     "LimpiarRazonamientoOpenRouterMiddleware",
-    "JuezCitas",
-    "JuezCitasLangChain",
     "MotorAgente",
     "MotorLangChain",
     "ManifiestoExperimento",
@@ -86,5 +82,4 @@ __all__ = [
     "ToolSuite",
     "TroceadorCorpus",
     "VERSION_PROTOCOLO_CITAS",
-    "VeredictoCita",
 ]

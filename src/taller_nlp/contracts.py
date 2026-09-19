@@ -22,21 +22,7 @@ NombreHerramienta = Literal[
 
 FuenteRespuesta = Literal["xbrl", "texto", "ambas", "ninguna"]
 FamiliaPregunta = Literal["extractiva", "numerica", "comparativa"]
-VERSION_PROTOCOLO_CITAS = 3
-
-
-class VeredictoCita(BaseModel):
-    """Resultado auditable producido por un juez semántico de citas."""
-
-    model_config = ConfigDict(extra="forbid", frozen=True)
-
-    respalda: bool = Field(
-        description="True solo si toda la respuesta está respaldada."
-    )
-    justificacion: str = Field(
-        min_length=1,
-        description="Explicación breve basada exclusivamente en la evidencia.",
-    )
+VERSION_PROTOCOLO_CITAS = 4
 
 
 class RespuestaFinanciera(BaseModel):
@@ -251,7 +237,7 @@ class InformeEvaluacion(BaseModel):
     tolerancia_absoluta: float = Field(ge=0)
     tolerancia_relativa: float = Field(ge=0)
     metodo_soporte_citas: str = Field(default="no_especificado", min_length=1)
-    version_protocolo_citas: Literal[3] = VERSION_PROTOCOLO_CITAS
+    version_protocolo_citas: Literal[4] = VERSION_PROTOCOLO_CITAS
 
     @model_validator(mode="after")
     def validar_ids_unicos(self) -> "InformeEvaluacion":

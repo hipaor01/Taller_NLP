@@ -53,7 +53,7 @@ class TestEjemploBaseline(unittest.TestCase):
         self.assertEqual(configuracion.max_reintentos_rate_limit, 3)
 
     def test_ensambla_sin_api_ni_descargar_embeddings(self) -> None:
-        constructor = crear_constructor_baseline(juez_citas=lambda *_: True)
+        constructor = crear_constructor_baseline()
         self.assertEqual(constructor.nombre, "baseline-notebook-s1")
         self.assertIs(
             constructor.fabrica_herramientas.retriever.corpus,

@@ -11,7 +11,6 @@ from pydantic import ValidationError
 from taller_nlp import (
     ConfiguracionAgente,
     ConstructorAgente,
-    FragmentoCorpus,
     InformeEvaluacion,
     ManifiestoExperimento,
     DescriptorComponente,
@@ -20,13 +19,6 @@ from taller_nlp import (
 )
 
 from tests.support import crear_corpus_temporal, crear_fabrica_prueba
-
-
-def juez_determinista(
-    respuesta: str,
-    evidencias: tuple[FragmentoCorpus, ...],
-) -> bool:
-    return bool(respuesta and evidencias)
 
 
 class MiddlewarePrueba(AgentMiddleware):
@@ -48,7 +40,6 @@ def crear_constructor(raiz: Path, *, k_retrieval: int = 3) -> ConstructorAgente:
         configuracion,
         corpus,
         crear_fabrica_prueba(corpus),
-        juez_determinista,
         middlewares=(MiddlewarePrueba(),),
         k_retrieval=k_retrieval,
         tolerancia_absoluta=0.5,
@@ -78,7 +69,7 @@ def crear_informe(ruta_golden: Path, *, nombre: str = "equipo-a-v1") -> InformeE
         k_retrieval=3,
         tolerancia_absoluta=0.5,
         tolerancia_relativa=1e-5,
-        metodo_soporte_citas="juez_determinista",
+        metodo_soporte_citas="coincidencia_literal_normalizada_120",
     )
 
 
@@ -118,6 +109,11 @@ class TestManifiestoExperimento(unittest.TestCase):
             self.assertEqual(len(manifiesto.sha256_codigo), 64)
             self.assertIn("langchain", manifiesto.versiones_dependencias)
             self.assertIsNone(manifiesto.sha256_golden)
+            self.assertEqual(manifiesto.version_esquema, 2)
+            self.assertNotIn(
+                "juez_citas",
+                manifiesto.model_dump(exclude_computed_fields=True),
+            )
 
     def test_guarda_rutas_relativas_y_recarga_verificando_hashes(self) -> None:
         with tempfile.TemporaryDirectory() as temporal:
@@ -176,7 +172,6 @@ class TestManifiestoExperimento(unittest.TestCase):
                 configuracion,
                 corpus,
                 crear_fabrica_prueba(corpus),
-                juez_determinista,
             )
             manifiesto = ManifiestoExperimento.desde_constructor(constructor)
             self.assertIsNotNone(manifiesto.sha256_indice)

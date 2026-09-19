@@ -12,11 +12,9 @@ from pathlib import Path
 from .chunking import FragmentoCorpus
 from .contracts import (
     InformeEvaluacion,
-    LlamadaHerramienta,
     RespuestaAgente,
     ResultadoPregunta,
     VERSION_PROTOCOLO_CITAS,
-    VeredictoCita,
 )
 from .corpus import CorpusVariant
 from .golden import CasoGolden
@@ -36,13 +34,9 @@ from .model_resilience import (
 )
 
 
-JuezCitas = Callable[
-    [str, tuple[FragmentoCorpus, ...]],
-    bool | VeredictoCita,
-]
-
 _ESPACIOS = re.compile(r"\s+")
 _CARACTERES_CITA_COMPROBADOS = 120
+_METODO_SOPORTE_CITAS = "coincidencia_literal_normalizada_120"
 
 
 class EvaluadorFinanciero:
@@ -51,7 +45,6 @@ class EvaluadorFinanciero:
     def __init__(
         self,
         corpus: CorpusVariant,
-        juez_citas: JuezCitas,
         *,
         k_retrieval: int = 5,
         tolerancia_absoluta: float = 1.0,
@@ -70,7 +63,6 @@ class EvaluadorFinanciero:
             raise ValueError("minimo_comparativas no puede ser negativo.")
 
         self._corpus = corpus
-        self._juez_citas = juez_citas
         self._k = k_retrieval
         self._tolerancia_absoluta = tolerancia_absoluta
         self._tolerancia_relativa = tolerancia_relativa
@@ -90,10 +82,6 @@ class EvaluadorFinanciero:
     def k_retrieval(self) -> int:
         """Profundidad usada para calcular recall@k."""
         return self._k
-
-    @property
-    def juez_citas(self) -> JuezCitas:
-        return self._juez_citas
 
     @property
     def tolerancia_absoluta(self) -> float:
@@ -185,7 +173,7 @@ class EvaluadorFinanciero:
             k_retrieval=self._k,
             tolerancia_absoluta=self._tolerancia_absoluta,
             tolerancia_relativa=self._tolerancia_relativa,
-            metodo_soporte_citas=self._nombre_juez(),
+            metodo_soporte_citas=_METODO_SOPORTE_CITAS,
         )
 
     @staticmethod
@@ -247,19 +235,12 @@ class EvaluadorFinanciero:
         justificacion_cita = None
         recall_at_k = None
         if caso.familia in {"extractiva", "comparativa"}:
-            (
-                cita_existe,
-                cita_respalda,
-                justificacion_cita,
-                error_juez,
-            ) = self._evaluar_citas(caso, respuesta)
+            cita_existe, cita_respalda = self._evaluar_citas(respuesta)
             recall_at_k = self._calcular_recall(caso, respuesta)
             if not cita_existe:
                 observaciones.append("Falta una cita o algún chunk_id no existe.")
             elif not cita_respalda:
                 observaciones.append("La cita no respalda completamente la respuesta.")
-            if error_juez:
-                observaciones.append(f"Error del juez de citas: {error_juez}")
 
         return ResultadoPregunta(
             id_pregunta=caso.id,
@@ -275,17 +256,18 @@ class EvaluadorFinanciero:
         )
 
     def _evaluar_citas(
-        self, caso: CasoGolden, respuesta: RespuestaAgente
-    ) -> tuple[bool, bool, str | None, str | None]:
+        self, respuesta: RespuestaAgente
+    ) -> tuple[bool, bool]:
+        """Comprueba de forma local que el extracto citado pertenece al chunk."""
         ids = respuesta.citas
         cita_existe = bool(ids) and all(chunk_id in self._chunks for chunk_id in ids)
         if not cita_existe:
-            return False, False, None, None
+            return False, False
 
         evidencias = tuple(self._chunks[chunk_id] for chunk_id in ids)
         cita = respuesta.cita
         if cita is None:
-            return True, False, None, None
+            return True, False
         prefijo_cita = self._normalizar_texto(cita)[
             :_CARACTERES_CITA_COMPROBADOS
         ]
@@ -296,37 +278,8 @@ class EvaluadorFinanciero:
         if not prefijo_cita or not any(
             prefijo_cita in texto for texto in evidencias_normalizadas
         ):
-            return True, False, None, None
-
-        ancla = caso.ancla_texto
-        if ancla is None:
-            return True, False, None, None
-        ancla_normalizada = self._normalizar_texto(ancla)
-        contiene_ancla = any(
-            ancla_normalizada in texto for texto in evidencias_normalizadas
-        )
-        if not contiene_ancla:
-            return True, False, None, None
-        try:
-            resultado_juez = self._juez_citas(respuesta.respuesta, evidencias)
-            if isinstance(resultado_juez, VeredictoCita):
-                respaldo_semantico = resultado_juez.respalda
-                justificacion = resultado_juez.justificacion
-            else:
-                respaldo_semantico = bool(resultado_juez)
-                justificacion = None
-        except Exception as exc:
-            if es_error_transitorio_modelo(exc):
-                tipo_error = (
-                    RateLimitAgotadoError
-                    if es_error_rate_limit(exc)
-                    else ErrorProveedorAgotadoError
-                )
-                raise tipo_error(
-                    f"Error transitorio al juzgar las citas de {caso.id}."
-                ) from exc
-            return True, False, None, formatear_excepcion_modelo(exc)
-        return True, respaldo_semantico, justificacion, None
+            return True, False
+        return True, True
 
     @staticmethod
     def _normalizar_texto(texto: str) -> str:
@@ -356,83 +309,8 @@ class EvaluadorFinanciero:
     def _trayectoria_correcta(
         self, caso: CasoGolden, respuesta: RespuestaAgente
     ) -> bool:
-        llamadas = tuple(llamada for llamada in respuesta.llamadas if llamada.exitosa)
-        ejercicios_xbrl = self._ejercicios_requeridos(caso)
-        for nombre in caso.herramienta_esperada:
-            if nombre == "list_available":
-                if not any(
-                    llamada.nombre == nombre for llamada in llamadas
-                ):
-                    return False
-            elif nombre == "get_xbrl_fact":
-                if not all(
-                    any(
-                        self._coincide_xbrl(llamada, caso, ejercicio)
-                        for llamada in llamadas
-                    )
-                    for ejercicio in ejercicios_xbrl
-                ):
-                    return False
-            elif nombre in {"search_filings", "read_section"}:
-                # El ancla textual pertenece al documento declarado por el
-                # caso. Una comparativa necesita las cifras de ambos ejercicios,
-                # pero no una búsqueda textual redundante en cada uno.
-                if not any(
-                    self._coincide_texto(
-                        llamada,
-                        caso,
-                        caso.fiscal_year,
-                        nombre,
-                    )
-                    for llamada in llamadas
-                ):
-                    return False
-        return True
-
-    @staticmethod
-    def _coincide_xbrl(
-        llamada: LlamadaHerramienta, caso: CasoGolden, ejercicio: int
-    ) -> bool:
-        args = llamada.argumentos
-        return (
-            llamada.nombre == "get_xbrl_fact"
-            and str(args.get("ticker", "")).upper() == caso.ticker
-            and EvaluadorFinanciero._entero(args.get("fiscal_year")) == ejercicio
-            and args.get("concept") == caso.concept_xbrl
-        )
-
-    @staticmethod
-    def _coincide_texto(
-        llamada: LlamadaHerramienta,
-        caso: CasoGolden,
-        ejercicio: int,
-        nombre: str,
-    ) -> bool:
-        args = llamada.argumentos
-        return (
-            llamada.nombre == nombre
-            and str(args.get("ticker", "")).upper() == caso.ticker
-            and EvaluadorFinanciero._entero(args.get("fiscal_year")) == ejercicio
-            and args.get("item") == caso.item_esperado
-        )
-
-    @staticmethod
-    def _entero(valor: object) -> int | None:
-        try:
-            return int(valor)  # type: ignore[arg-type]
-        except (TypeError, ValueError):
-            return None
-
-    @staticmethod
-    def _ejercicios_requeridos(caso: CasoGolden) -> tuple[int, ...]:
-        if caso.familia != "comparativa":
-            return (caso.fiscal_year,)
-        mencionados = sorted(
-            {int(anio) for anio in re.findall(r"\b20\d{2}\b", caso.pregunta)}
-        )
-        if len(mencionados) >= 2:
-            return tuple(mencionados)
-        return (caso.fiscal_year - 1, caso.fiscal_year)
+        usadas = {llamada.nombre for llamada in respuesta.llamadas}
+        return all(nombre in usadas for nombre in caso.herramienta_esperada)
 
     def _calcular_recall(
         self, caso: CasoGolden, respuesta: RespuestaAgente
@@ -473,20 +351,12 @@ class EvaluadorFinanciero:
                 chunks[chunk_id] = fragmento
         return chunks
 
-    def _nombre_juez(self) -> str:
-        return getattr(
-            self._juez_citas,
-            "__name__",
-            type(self._juez_citas).__name__,
-        )
-
     def _crear_contexto_progreso(
         self,
         nombre_agente: str,
         ruta_jsonl: Path,
         casos: tuple[CasoGolden, ...],
     ) -> ContextoProgreso:
-        parametros_juez = getattr(self._juez_citas, "parametros", None)
         firma = {
             "version_protocolo_citas": VERSION_PROTOCOLO_CITAS,
             "corpus": self._corpus.model_dump(mode="json"),
@@ -495,10 +365,7 @@ class EvaluadorFinanciero:
             "tolerancia_relativa": self._tolerancia_relativa,
             "numero_esperado": self._numero_esperado,
             "minimo_comparativas": self._minimo_comparativas,
-            "juez": self._nombre_juez(),
-            "parametros_juez": (
-                dict(parametros_juez) if parametros_juez is not None else None
-            ),
+            "metodo_soporte_citas": _METODO_SOPORTE_CITAS,
         }
         serializado = json.dumps(
             firma, ensure_ascii=False, sort_keys=True, separators=(",", ":")

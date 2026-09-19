@@ -69,7 +69,6 @@ class TestConstructorAgente(unittest.TestCase):
                 configuracion,
                 corpus,
                 crear_fabrica_prueba(corpus),
-                lambda *_: True,
                 telemetria_auxiliar=RegistroTelemetriaAuxiliar(),
             )
 
@@ -104,7 +103,6 @@ class TestConstructorAgente(unittest.TestCase):
                 configuracion,
                 corpus,
                 crear_fabrica_prueba(corpus),
-                lambda respuesta, evidencias: True,
                 k_retrieval=3,
             )
 
@@ -145,7 +143,6 @@ class TestConstructorAgente(unittest.TestCase):
                     configuracion,
                     corpus_a,
                     crear_fabrica_prueba(corpus_b),
-                    lambda *_: True,
                 )
 
     def test_reutiliza_validacion_del_evaluador(self) -> None:
@@ -160,7 +157,6 @@ class TestConstructorAgente(unittest.TestCase):
                     configuracion,
                     corpus,
                     crear_fabrica_prueba(corpus),
-                    lambda *_: True,
                     k_retrieval=0,
                 )
 

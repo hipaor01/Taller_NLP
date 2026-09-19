@@ -13,7 +13,6 @@ from taller_nlp import (
     LlamadaHerramienta,
     RateLimitAgotadoError,
     RespuestaAgente,
-    VeredictoCita,
 )
 
 from tests.support import ANCLA_2024, TEXTO_2024, crear_corpus_temporal, escribir_jsonl
@@ -123,8 +122,7 @@ class TestEvaluadorFinanciero(unittest.TestCase):
     def test_rechaza_cita_textual_que_no_aparece_en_el_chunk(self) -> None:
         with tempfile.TemporaryDirectory() as temporal:
             corpus, _ = crear_corpus_temporal(Path(temporal) / "corpus")
-            evaluador = EvaluadorFinanciero(corpus, lambda *_: True)
-            caso = CasoGolden.model_validate(caso_extractivo())
+            evaluador = EvaluadorFinanciero(corpus)
             respuesta = RespuestaAgente(
                 respuesta="Las disrupciones pueden afectar las operaciones.",
                 fuente="texto",
@@ -133,20 +131,33 @@ class TestEvaluadorFinanciero(unittest.TestCase):
                 latencia_ms=1,
             )
 
-            cita_existe, cita_respalda, _, _ = evaluador._evaluar_citas(
-                caso,
-                respuesta,
-            )
+            cita_existe, cita_respalda = evaluador._evaluar_citas(respuesta)
 
             self.assertTrue(cita_existe)
             self.assertFalse(cita_respalda)
+
+    def test_acepta_cita_literal_aunque_no_contenga_el_ancla_golden(self) -> None:
+        with tempfile.TemporaryDirectory() as temporal:
+            corpus, _ = crear_corpus_temporal(Path(temporal) / "corpus")
+            evaluador = EvaluadorFinanciero(corpus)
+            respuesta = RespuestaAgente(
+                respuesta="Hubo disrupciones en la cadena de suministro.",
+                fuente="texto",
+                citas=("ACME-2024-1A-0000",),
+                cita="Supply chain disruptions could",
+                latencia_ms=1,
+            )
+
+            cita_existe, cita_respalda = evaluador._evaluar_citas(respuesta)
+
+            self.assertTrue(cita_existe)
+            self.assertTrue(cita_respalda)
 
     def test_tolerancia_relativa_acepta_redondeo_del_uno_por_ciento(self) -> None:
         with tempfile.TemporaryDirectory() as temporal:
             corpus, _ = crear_corpus_temporal(Path(temporal) / "corpus")
             evaluador = EvaluadorFinanciero(
                 corpus,
-                lambda *_: True,
                 tolerancia_absoluta=0,
                 tolerancia_relativa=0.01,
             )
@@ -166,13 +177,13 @@ class TestEvaluadorFinanciero(unittest.TestCase):
             self.assertTrue(evaluador._cifra_correcta(caso, redondeada))
             self.assertFalse(evaluador._cifra_correcta(caso, incorrecta))
 
-    def test_comparativa_exige_dos_xbrl_y_una_busqueda_textual(self) -> None:
+    def test_trayectoria_solo_exige_los_nombres_de_las_tools(self) -> None:
         with tempfile.TemporaryDirectory() as temporal:
             raiz = Path(temporal)
             corpus, _ = crear_corpus_temporal(raiz / "corpus")
             ruta = raiz / "comparativa.jsonl"
             escribir_jsonl(ruta, [caso_comparativo()])
-            evaluador = EvaluadorFinanciero(corpus, lambda *_: True)
+            evaluador = EvaluadorFinanciero(corpus)
 
             llamadas = tuple(
                 LlamadaHerramienta(
@@ -224,16 +235,28 @@ class TestEvaluadorFinanciero(unittest.TestCase):
 
             self.assertTrue(informe.resultados[0].trayectoria_correcta)
 
-            respuesta_incompleta = respuesta.model_copy(
+            respuesta_con_argumentos_distintos = respuesta.model_copy(
                 update={"llamadas": llamadas[1:]}
             )
-            informe_incompleto = evaluador.evaluar(
+            informe_argumentos_distintos = evaluador.evaluar(
                 nombre_agente="agente-comparativo",
-                responder=lambda _: respuesta_incompleta,
+                responder=lambda _: respuesta_con_argumentos_distintos,
+                ruta_jsonl=ruta,
+            )
+            self.assertTrue(
+                informe_argumentos_distintos.resultados[0].trayectoria_correcta
+            )
+
+            respuesta_sin_xbrl = respuesta.model_copy(
+                update={"llamadas": llamadas[-1:]}
+            )
+            informe_sin_xbrl = evaluador.evaluar(
+                nombre_agente="agente-comparativo",
+                responder=lambda _: respuesta_sin_xbrl,
                 ruta_jsonl=ruta,
             )
             self.assertFalse(
-                informe_incompleto.resultados[0].trayectoria_correcta
+                informe_sin_xbrl.resultados[0].trayectoria_correcta
             )
 
     def test_evalua_cifra_cita_trayectoria_recall_y_agregados(self) -> None:
@@ -242,18 +265,8 @@ class TestEvaluadorFinanciero(unittest.TestCase):
             corpus, _ = crear_corpus_temporal(raiz / "corpus")
             ruta = raiz / "evaluacion.jsonl"
             escribir_jsonl(ruta, [caso_extractivo(), caso_numerico()])
-            juez_llamadas = []
-
-            def juez(respuesta, evidencias):
-                juez_llamadas.append((respuesta, evidencias))
-                return VeredictoCita(
-                    respalda=True,
-                    justificacion="La evidencia contiene la consecuencia.",
-                )
-
             evaluador = EvaluadorFinanciero(
                 corpus,
-                juez,
                 k_retrieval=1,
                 tolerancia_absoluta=0.1,
                 tolerancia_relativa=0,
@@ -314,25 +327,19 @@ class TestEvaluadorFinanciero(unittest.TestCase):
             self.assertEqual(informe.latencia_media_ms, 20)
             self.assertEqual(informe.coste_medio_usd, 0.02)
             self.assertEqual(informe.llamadas_por_pregunta, 1)
-            self.assertEqual(len(juez_llamadas), 1)
-            evidencia = juez_llamadas[0][1][0]
-            self.assertEqual(evidencia.chunk_id, "ACME-2024-1A-0000")
-            self.assertEqual(evidencia.ticker, "ACME")
-            self.assertEqual(evidencia.fiscal_year, 2024)
-            self.assertEqual(evidencia.item, "1A")
-            self.assertEqual(evidencia.texto, TEXTO_2024)
+            self.assertIsNone(informe.resultados[0].justificacion_cita)
             self.assertEqual(
-                informe.resultados[0].justificacion_cita,
-                "La evidencia contiene la consecuencia.",
+                informe.metodo_soporte_citas,
+                "coincidencia_literal_normalizada_120",
             )
 
-    def test_una_llamada_con_concept_incorrecto_no_cumple_trayectoria(self) -> None:
+    def test_argumentos_incorrectos_no_afectan_la_trayectoria(self) -> None:
         with tempfile.TemporaryDirectory() as temporal:
             raiz = Path(temporal)
             corpus, _ = crear_corpus_temporal(raiz / "corpus")
             ruta = raiz / "numerico.jsonl"
             escribir_jsonl(ruta, [caso_numerico()])
-            evaluador = EvaluadorFinanciero(corpus, lambda *_: True)
+            evaluador = EvaluadorFinanciero(corpus)
             llamada = LlamadaHerramienta(
                 id="mal",
                 nombre="get_xbrl_fact",
@@ -356,8 +363,8 @@ class TestEvaluadorFinanciero(unittest.TestCase):
                     latencia_ms=0,
                 ),
             )
-            self.assertFalse(informe.resultados[0].trayectoria_correcta)
-            self.assertFalse(informe.resultados[0].acierto)
+            self.assertTrue(informe.resultados[0].trayectoria_correcta)
+            self.assertTrue(informe.resultados[0].acierto)
 
     def test_persiste_cada_caso_y_reanuda_solo_los_pendientes(self) -> None:
         with tempfile.TemporaryDirectory() as temporal:
@@ -387,7 +394,7 @@ class TestEvaluadorFinanciero(unittest.TestCase):
                 return self._respuesta_numerica(2024, 100)
 
             evaluador = EvaluadorFinanciero(
-                corpus, lambda *_: True, ruta_progreso=ruta_progreso
+                corpus, ruta_progreso=ruta_progreso
             )
             with self.assertRaises(KeyboardInterrupt):
                 evaluador.evaluar(
@@ -404,7 +411,7 @@ class TestEvaluadorFinanciero(unittest.TestCase):
                 return self._respuesta_numerica(2023, 80)
 
             informe = EvaluadorFinanciero(
-                corpus, lambda *_: True, ruta_progreso=ruta_progreso
+                corpus, ruta_progreso=ruta_progreso
             ).evaluar(
                 nombre_agente="agente-v1",
                 responder=responder_reanudando,
@@ -422,7 +429,7 @@ class TestEvaluadorFinanciero(unittest.TestCase):
             ruta_progreso = raiz / "progreso.json"
             escribir_jsonl(ruta_golden, [caso_numerico()])
             evaluador = EvaluadorFinanciero(
-                corpus, lambda *_: True, ruta_progreso=ruta_progreso
+                corpus, ruta_progreso=ruta_progreso
             )
 
             with self.assertRaises(RateLimitAgotadoError):
@@ -456,7 +463,7 @@ class TestEvaluadorFinanciero(unittest.TestCase):
             ruta_progreso = raiz / "progreso.json"
             escribir_jsonl(ruta_golden, [caso_numerico()])
             evaluador = EvaluadorFinanciero(
-                corpus, lambda *_: True, ruta_progreso=ruta_progreso
+                corpus, ruta_progreso=ruta_progreso
             )
             evaluador.evaluar(
                 nombre_agente="agente-v1",
@@ -497,7 +504,7 @@ class TestEvaluadorFinanciero(unittest.TestCase):
             ruta_progreso = raiz / "progreso.json"
             escribir_jsonl(ruta_golden, [caso_numerico()])
             evaluador = EvaluadorFinanciero(
-                corpus, lambda *_: True, ruta_progreso=ruta_progreso
+                corpus, ruta_progreso=ruta_progreso
             )
             evaluador.evaluar(
                 nombre_agente="agente-v1",

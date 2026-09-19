@@ -14,7 +14,7 @@ from .agent import AgenteFinanciero
 from .auxiliary_telemetry import RegistroTelemetriaAuxiliar
 from .config import ConfiguracionAgente
 from .corpus import CorpusVariant
-from .evaluation import EvaluadorFinanciero, JuezCitas
+from .evaluation import EvaluadorFinanciero
 from .langchain_engine import MotorLangChain
 from .model_resilience import ControlPeticionesModelo
 from .tool_factory import FabricaHerramientas
@@ -36,7 +36,6 @@ class ConstructorAgente:
         "_corpus",
         "_fabrica_herramientas",
         "_evaluador",
-        "_juez_citas",
         "_middlewares",
         "_modelo",
         "_control_peticiones",
@@ -49,7 +48,6 @@ class ConstructorAgente:
         configuracion: ConfiguracionAgente,
         corpus: CorpusVariant,
         fabrica_herramientas: FabricaHerramientas,
-        juez_citas: JuezCitas,
         *,
         middlewares: Sequence[AgentMiddleware] = (),
         modelo: BaseChatModel | None = None,
@@ -82,14 +80,10 @@ class ConstructorAgente:
                 "La fábrica de herramientas y el constructor deben usar la "
                 "misma CorpusVariant."
             )
-        if not callable(juez_citas):
-            raise TypeError("juez_citas debe ser callable.")
-
         self._nombre = nombre_normalizado
         self._configuracion = configuracion
         self._corpus = corpus
         self._fabrica_herramientas = fabrica_herramientas
-        self._juez_citas = juez_citas
         self._middlewares = tuple(middlewares)
         self._modelo = modelo
         self._control_peticiones = control_peticiones or (
@@ -107,7 +101,6 @@ class ConstructorAgente:
         # lo liga necesariamente al mismo corpus que el resto de componentes.
         self._evaluador = EvaluadorFinanciero(
             corpus,
-            juez_citas,
             k_retrieval=k_retrieval,
             tolerancia_absoluta=tolerancia_absoluta,
             tolerancia_relativa=tolerancia_relativa,
@@ -135,10 +128,6 @@ class ConstructorAgente:
     @property
     def evaluador(self) -> EvaluadorFinanciero:
         return self._evaluador
-
-    @property
-    def juez_citas(self) -> JuezCitas:
-        return self._juez_citas
 
     @property
     def middlewares(self) -> tuple[AgentMiddleware, ...]:

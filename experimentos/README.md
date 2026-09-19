@@ -122,8 +122,8 @@ python -m experimentos.baseline --pregunta \
 
 El comando muestra por `stderr` cuándo comienza y termina cada llamada al
 modelo y a las herramientas. Cada llamada al modelo tiene un timeout de 60
-segundos. Agente y juez comparten un límite de 18 peticiones por minuto, sin
-ráfagas, para respetar el máximo de 20 RPM de las cuentas nuevas de OpenRouter.
+segundos. El agente usa un límite de 18 peticiones por minuto, sin ráfagas,
+para respetar el máximo de 20 RPM de las cuentas nuevas de OpenRouter.
 Si aun así reciben un HTTP 429, hacen hasta tres reintentos con esperas de
 aproximadamente 5, 10 y 20 segundos. Esos mismos reintentos se aplican al 400
 genérico `Provider returned error`, sin reintentar otros errores 400 que sí
@@ -164,8 +164,8 @@ python -m experimentos.baseline --evaluar golden_set.jsonl
 ```
 
 El evaluador cargará las preguntas ya terminadas y comenzará por la primera
-pendiente. Esos casos no vuelven a llamar al agente ni al juez, por lo que no
-vuelven a generar coste.
+pendiente. Esos casos no vuelven a llamar al agente, por lo que no vuelven a
+generar coste.
 
 Los resultados antiguos cuyo error sea `Provider returned error`, HTTP 429 o
 `GraphRecursionError` se consideran incompletos y se vuelven a ejecutar
@@ -219,8 +219,10 @@ El limitador es compartido dentro de un proceso. Dos procesos o dos ordenadores
 que utilicen la misma cuenta de OpenRouter no coordinan su ritmo entre sí y
 deben repartirse conjuntamente el límite de la cuenta.
 
-La evaluación hace llamadas reales al modelo y al juez de citas, por lo que
-tiene coste. Para indicar una ruta concreta para el manifiesto:
+La generación de respuestas hace llamadas reales al modelo y tiene coste. Los
+tres evaluadores son locales y deterministas: verifican la cita literal, la
+cifra con tolerancia y los nombres de las herramientas usadas. Para indicar
+una ruta concreta para el manifiesto:
 
 ```bash
 python -m experimentos.baseline \

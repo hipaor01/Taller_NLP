@@ -27,8 +27,6 @@ from taller_nlp import (
     ConstructorAgente,
     CorpusVariant,
     FabricaHerramientas,
-    JuezCitas,
-    JuezCitasLangChain,
     ManifiestoExperimento,
     ProgresoConsolaMiddleware,
     RegistroTelemetriaAuxiliar,
@@ -46,8 +44,6 @@ MODELO_AGENTE = os.getenv(
     "TALLER_MODELO_AGENTE",
     "openrouter:google/gemini-3.8-flash",
 )
-MODELO_JUEZ = os.getenv("TALLER_MODELO_JUEZ", MODELO_AGENTE)
-
 # Tarifas docentes fijadas en el notebook S2 (USD por millón de tokens).
 # Para un modelo no incluido se conserva coste=None antes que estimar con una
 # tarifa que no le corresponde.
@@ -145,7 +141,6 @@ def crear_fabrica_baseline(
 
 def crear_constructor_baseline(
     *,
-    juez_citas: JuezCitas | None = None,
     middlewares: Sequence[AgentMiddleware] = (),
     modelo: BaseChatModel | None = None,
     control_peticiones: ControlPeticionesModelo | None = None,
@@ -160,17 +155,11 @@ def crear_constructor_baseline(
     control = control_peticiones or ControlPeticionesModelo.desde_configuracion(
         configuracion
     )
-    juez = (
-        juez_citas
-        if juez_citas is not None
-        else JuezCitasLangChain(MODELO_JUEZ, control_peticiones=control)
-    )
     return ConstructorAgente(
         nombre="baseline-notebook-s1",
         configuracion=configuracion,
         corpus=corpus,
         fabrica_herramientas=fabrica,
-        juez_citas=juez,
         middlewares=middlewares,
         modelo=modelo,
         control_peticiones=control,
@@ -193,7 +182,6 @@ def crear_constructor() -> ConstructorAgente:
 
 def crear_agente_baseline(
     *,
-    juez_citas: JuezCitas | None = None,
     middlewares: Sequence[AgentMiddleware] = (),
     modelo: BaseChatModel | None = None,
     control_peticiones: ControlPeticionesModelo | None = None,
@@ -202,7 +190,6 @@ def crear_agente_baseline(
 ) -> tuple[ConstructorAgente, AgenteFinanciero]:
     """Devuelve constructor y fachada para responder o evaluar."""
     constructor = crear_constructor_baseline(
-        juez_citas=juez_citas,
         middlewares=middlewares,
         modelo=modelo,
         control_peticiones=control_peticiones,
