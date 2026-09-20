@@ -181,6 +181,36 @@ python -m agente \
   --salida resultados/resumen_agente_v006.csv
 ```
 
+## `agente_v007`: v005 + reparación determinista de citas
+
+Esta variante conserva íntegramente la v005 —búsqueda densa con filtros de
+metadatos y verificación XBRL— y añade un middleware que valida el par
+`cita`/`chunk_id` contra los resultados efectivos de `search_filings`.
+
+El middleware no consulta el golden set ni inventa evidencia. Si una cita
+literal coincide con un único chunk recuperado, completa su `chunk_id`. Si el
+modelo declaró un chunk recuperado pero reformateó una tabla o una frase,
+sustituye la cita por una línea literal solo cuando la coincidencia léxica y
+numérica es inequívoca. En caso contrario, deja la respuesta intacta.
+
+Para evaluarla:
+
+```bash
+python -m agente \
+  --variante experimentos.higinio.agente_v007 \
+  --evaluar golden_set.jsonl \
+  --salida resultados/agente_v007.csv
+```
+
+Para generar su resumen:
+
+```bash
+python -m agente \
+  --resumir resultados/agente_v007.csv \
+  --etiqueta agente_v007 \
+  --salida resultados/resumen_agente_v007.csv
+```
+
 ## Progreso reanudable y análisis detallado
 
 Todas las evaluaciones lanzadas con `python -m agente --evaluar` guardan ahora
@@ -188,7 +218,7 @@ un JSON de progreso automático en `experimentos/resultados/progreso/`. Por
 ejemplo, la evaluación de v005 crea un fichero con este patrón:
 
 ```text
-experimentos/resultados/progreso/agente_v005_golden_set_<hash>_citas-v4.json
+experimentos/resultados/progreso/agente_v005_golden_set_<hash>_citas-v5.json
 ```
 
 El fichero conserva cada respuesta completa, sus llamadas a herramientas y el

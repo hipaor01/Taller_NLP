@@ -5,11 +5,10 @@ from __future__ import annotations
 import json
 import hashlib
 import math
-import re
 from collections.abc import Callable
 from pathlib import Path
 
-from .chunking import FragmentoCorpus
+from .citas import cargar_fragmentos, cita_esta_respaldada
 from .contracts import (
     InformeEvaluacion,
     RespuestaAgente,
@@ -34,8 +33,6 @@ from .model_resilience import (
 )
 
 
-_ESPACIOS = re.compile(r"\s+")
-_CARACTERES_CITA_COMPROBADOS = 120
 _METODO_SOPORTE_CITAS = "coincidencia_literal_normalizada_120"
 
 
@@ -71,7 +68,7 @@ class EvaluadorFinanciero:
         self._ruta_progreso = (
             Path(ruta_progreso).resolve() if ruta_progreso is not None else None
         )
-        self._chunks = self._cargar_chunks(corpus.ruta_chunks)
+        self._chunks = cargar_fragmentos(corpus.ruta_chunks)
 
     @property
     def corpus(self) -> CorpusVariant:
@@ -273,23 +270,12 @@ class EvaluadorFinanciero:
         cita = respuesta.cita
         if cita is None:
             return True, False
-        prefijo_cita = self._normalizar_texto(cita)[
-            :_CARACTERES_CITA_COMPROBADOS
-        ]
-        evidencias_normalizadas = tuple(
-            self._normalizar_texto(evidencia.texto)
+        if not any(
+            cita_esta_respaldada(cita, evidencia.texto)
             for evidencia in evidencias
-        )
-        if not prefijo_cita or not any(
-            prefijo_cita in texto for texto in evidencias_normalizadas
         ):
             return True, False
         return True, True
-
-    @staticmethod
-    def _normalizar_texto(texto: str) -> str:
-        """Normaliza espacios y caja para comparar extractos literales."""
-        return _ESPACIOS.sub(" ", texto).strip().casefold()
 
     def _cifra_correcta(
         self, caso: CasoGolden, respuesta: RespuestaAgente
@@ -335,26 +321,6 @@ class EvaluadorFinanciero:
             if (fragmento := self._chunks.get(chunk_id)) is not None
         )
         return float(encontro_ancla)
-
-    @staticmethod
-    def _cargar_chunks(ruta: Path) -> dict[str, FragmentoCorpus]:
-        chunks: dict[str, FragmentoCorpus] = {}
-        with ruta.open(encoding="utf-8") as fichero:
-            for numero_linea, linea in enumerate(fichero, start=1):
-                if not linea.strip():
-                    continue
-                try:
-                    fila = json.loads(linea)
-                    fragmento = FragmentoCorpus.model_validate(fila)
-                    chunk_id = fragmento.chunk_id
-                except (json.JSONDecodeError, ValueError) as exc:
-                    raise ValueError(
-                        f"Chunk inválido en {ruta}:{numero_linea}."
-                    ) from exc
-                if chunk_id in chunks:
-                    raise ValueError(f"chunk_id duplicado: {chunk_id}")
-                chunks[chunk_id] = fragmento
-        return chunks
 
     def _crear_contexto_progreso(
         self,
