@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
+
+from langchain.agents.middleware import AgentMiddleware
+
 from experimentos.baseline import (
     crear_configuracion_baseline,
     crear_fabrica_baseline,
@@ -24,6 +28,7 @@ def ensamblar_variante_retrieval(
     configuracion: ConfiguracionAgente | None = None,
     control_peticiones: ControlPeticionesModelo | None = None,
     telemetria_auxiliar: RegistroTelemetriaAuxiliar | None = None,
+    middlewares: Sequence[AgentMiddleware] = (),
 ) -> ConstructorAgente:
     """Conserva todos los parámetros del baseline salvo el retriever."""
     fabrica = crear_fabrica_baseline(corpus, retriever)
@@ -32,6 +37,7 @@ def ensamblar_variante_retrieval(
         configuracion=configuracion or crear_configuracion_baseline(),
         corpus=corpus,
         fabrica_herramientas=fabrica,
+        middlewares=middlewares,
         control_peticiones=control_peticiones,
         telemetria_auxiliar=telemetria_auxiliar,
         k_retrieval=5,

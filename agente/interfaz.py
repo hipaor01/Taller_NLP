@@ -143,7 +143,10 @@ def tabla_desde_manifiesto(
     return _informe_a_dataframe(informe, casos)
 
 
-def _crear_constructor_configurado() -> ConstructorAgente:
+def _crear_constructor_configurado(
+    *,
+    ruta_progreso: str | Path | None = None,
+) -> ConstructorAgente:
     """Carga la factoría común de la variante seleccionada por el entorno."""
     nombre_modulo = os.getenv(VARIABLE_VARIANTE, MODULO_BASELINE).strip()
     if not nombre_modulo:
@@ -155,7 +158,10 @@ def _crear_constructor_configurado() -> ConstructorAgente:
         raise AttributeError(
             f"{nombre_modulo} debe exponer una función {NOMBRE_FACTORIA}()."
         )
-    return fabrica()
+    constructor = fabrica()
+    if ruta_progreso is not None:
+        constructor = constructor.con_ruta_progreso(ruta_progreso)
+    return constructor
 
 
 @dataclass(frozen=True, slots=True)
@@ -166,10 +172,16 @@ class _RuntimeNotebook:
     motor: MotorLangChain
 
     @classmethod
-    def crear(cls) -> "_RuntimeNotebook":
+    def crear(
+        cls,
+        *,
+        ruta_progreso: str | Path | None = None,
+    ) -> "_RuntimeNotebook":
         from langgraph.checkpoint.memory import InMemorySaver
 
-        constructor = _crear_constructor_configurado()
+        constructor = _crear_constructor_configurado(
+            ruta_progreso=ruta_progreso,
+        )
         motor = constructor.construir_motor(checkpointer=InMemorySaver())
         return cls(constructor=constructor, motor=motor)
 
@@ -265,11 +277,26 @@ def evaluar(
     ruta_jsonl: str | Path,
     *,
     salida: str | Path | None = None,
+    ruta_progreso: str | Path | None = None,
 ) -> pd.DataFrame:
     """Evalúa un JSONL y devuelve la tabla exigida para el informe S2."""
-    return _obtener_runtime().evaluar(ruta_jsonl, salida=salida)
+    runtime = (
+        _RuntimeNotebook.crear(ruta_progreso=ruta_progreso)
+        if ruta_progreso is not None
+        else _obtener_runtime()
+    )
+    return runtime.evaluar(ruta_jsonl, salida=salida)
 
 
-def evaluar_informe(ruta_jsonl: str | Path) -> InformeEvaluacion:
+def evaluar_informe(
+    ruta_jsonl: str | Path,
+    *,
+    ruta_progreso: str | Path | None = None,
+) -> InformeEvaluacion:
     """Devuelve el informe estructurado completo para análisis y auditoría."""
-    return _obtener_runtime().evaluar_informe(ruta_jsonl)
+    runtime = (
+        _RuntimeNotebook.crear(ruta_progreso=ruta_progreso)
+        if ruta_progreso is not None
+        else _obtener_runtime()
+    )
+    return runtime.evaluar_informe(ruta_jsonl)

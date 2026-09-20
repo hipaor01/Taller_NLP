@@ -10,7 +10,7 @@ from unittest.mock import patch
 
 import pandas as pd
 
-from agente.__main__ import main
+from agente.__main__ import _ruta_progreso_automatica, main
 from agente.interfaz import VARIABLE_VARIANTE
 
 
@@ -49,9 +49,76 @@ class TestCliAgente(unittest.TestCase):
                 )
 
             self.assertEqual(codigo, 0)
-            evaluar_mock.assert_called_once_with(entrada, salida=salida)
+            ruta_progreso = _ruta_progreso_automatica(
+                entrada,
+                modulo_variante="experimentos.equipo.agente_v002",
+            )
+            self.assertEqual(
+                ruta_progreso.parent,
+                Path(__file__).resolve().parents[1]
+                / "experimentos"
+                / "resultados"
+                / "progreso",
+            )
+            evaluar_mock.assert_called_once_with(
+                entrada,
+                salida=salida,
+                ruta_progreso=ruta_progreso,
+            )
             self.assertIn("q1", stdout.getvalue())
             self.assertIn(str(salida.resolve()), stderr.getvalue())
+            self.assertIn(str(ruta_progreso.resolve()), stderr.getvalue())
+
+    def test_admite_progreso_explicito_y_reinicio(self) -> None:
+        with tempfile.TemporaryDirectory() as temporal:
+            raiz = Path(temporal)
+            entrada = raiz / "golden.jsonl"
+            entrada.write_text("{}\n", encoding="utf-8")
+            progreso = raiz / "progreso" / "v005.json"
+            progreso.parent.mkdir()
+            progreso.write_text("antiguo\n", encoding="utf-8")
+            tabla = pd.DataFrame([{"id": "q1"}])
+
+            with patch(
+                "agente.__main__.evaluar",
+                return_value=tabla,
+            ) as evaluar_mock:
+                with redirect_stdout(io.StringIO()), redirect_stderr(
+                    io.StringIO()
+                ):
+                    codigo = main(
+                        [
+                            "--evaluar",
+                            str(entrada),
+                            "--progreso",
+                            str(progreso),
+                            "--reiniciar-progreso",
+                        ]
+                    )
+
+            self.assertEqual(codigo, 0)
+            self.assertFalse(progreso.exists())
+            evaluar_mock.assert_called_once_with(
+                entrada,
+                salida=None,
+                ruta_progreso=progreso,
+            )
+
+    def test_rechaza_progreso_fuera_de_evaluacion(self) -> None:
+        with tempfile.TemporaryDirectory() as temporal:
+            ruta = Path(temporal) / "tabla.csv"
+            pd.DataFrame({"cita": [True]}).to_csv(ruta, index=False)
+            with redirect_stderr(io.StringIO()):
+                with self.assertRaises(SystemExit) as contexto:
+                    main(
+                        [
+                            "--resumir",
+                            str(ruta),
+                            "--progreso",
+                            str(Path(temporal) / "progreso.json"),
+                        ]
+                    )
+        self.assertEqual(contexto.exception.code, 2)
 
     def test_exige_ruta_de_evaluacion(self) -> None:
         with redirect_stderr(io.StringIO()):

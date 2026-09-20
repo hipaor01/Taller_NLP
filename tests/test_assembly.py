@@ -160,6 +160,51 @@ class TestConstructorAgente(unittest.TestCase):
                     k_retrieval=0,
                 )
 
+    def test_copia_la_composicion_al_configurar_progreso(self) -> None:
+        with tempfile.TemporaryDirectory() as temporal:
+            raiz = Path(temporal)
+            corpus, _ = crear_corpus_temporal(raiz / "corpus")
+            configuracion = ConfiguracionAgente(
+                modelo="modelo", system_prompt="prompt"
+            )
+            telemetria = RegistroTelemetriaAuxiliar()
+            original = ConstructorAgente(
+                "agente",
+                configuracion,
+                corpus,
+                crear_fabrica_prueba(corpus),
+                telemetria_auxiliar=telemetria,
+                k_retrieval=3,
+                tolerancia_absoluta=0.5,
+                tolerancia_relativa=0.01,
+                numero_esperado=2,
+                minimo_comparativas=1,
+            )
+            ruta = raiz / "progreso.json"
+
+            copia = original.con_ruta_progreso(ruta)
+
+            self.assertIsNot(copia, original)
+            self.assertEqual(copia.nombre, original.nombre)
+            self.assertIs(copia.configuracion, original.configuracion)
+            self.assertIs(copia.corpus, original.corpus)
+            self.assertIs(
+                copia.fabrica_herramientas,
+                original.fabrica_herramientas,
+            )
+            self.assertIs(
+                copia.control_peticiones,
+                original.control_peticiones,
+            )
+            self.assertIs(copia.telemetria_auxiliar, telemetria)
+            self.assertEqual(copia.evaluador.k_retrieval, 3)
+            self.assertEqual(copia.evaluador.tolerancia_absoluta, 0.5)
+            self.assertEqual(copia.evaluador.tolerancia_relativa, 0.01)
+            self.assertEqual(copia.evaluador.numero_esperado, 2)
+            self.assertEqual(copia.evaluador.minimo_comparativas, 1)
+            self.assertEqual(copia.evaluador.ruta_progreso, ruta.resolve())
+            self.assertIsNone(original.evaluador.ruta_progreso)
+
 
 if __name__ == "__main__":
     unittest.main()

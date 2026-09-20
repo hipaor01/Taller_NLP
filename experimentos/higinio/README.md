@@ -126,3 +126,83 @@ python -m agente \
   --etiqueta agente_v004 \
   --salida resultados/resumen_agente_v004.csv
 ```
+
+## `agente_v005`: v001 + verificación XBRL
+
+Esta variante vuelve a tomar la v001 como referencia: conserva la búsqueda
+densa con filtros y añade un middleware `after_model` que contrasta cualquier
+cifra de la respuesta estructurada con los hechos XBRL de la misma compañía y
+ejercicio.
+
+Si ninguna cifra reportada cuadra con una tolerancia relativa del 1 %, el
+middleware devuelve al modelo el valor afirmado, los hechos disponibles y un
+salto explícito a `model`. Solo permite una corrección por ejecución para evitar
+bucles.
+
+Para evaluarla:
+
+```bash
+python -m agente \
+  --variante experimentos.higinio.agente_v005 \
+  --evaluar golden_set.jsonl \
+  --salida resultados/agente_v005.csv
+```
+
+Para generar el resumen del informe:
+
+```bash
+python -m agente \
+  --resumir resultados/agente_v005.csv \
+  --etiqueta agente_v005 \
+  --salida resultados/resumen_agente_v005.csv
+```
+
+## `agente_v006`: v004 + verificación XBRL
+
+Esta variante mantiene íntegramente la combinación de v004 —reescritura LLM,
+búsqueda densa con filtros y fusión híbrida BM25 mediante RRF— y añade el mismo
+middleware determinista de verificación XBRL utilizado por v005.
+
+Para evaluarla:
+
+```bash
+python -m agente \
+  --variante experimentos.higinio.agente_v006 \
+  --evaluar golden_set.jsonl \
+  --salida resultados/agente_v006.csv
+```
+
+Para generar el resumen del informe:
+
+```bash
+python -m agente \
+  --resumir resultados/agente_v006.csv \
+  --etiqueta agente_v006 \
+  --salida resultados/resumen_agente_v006.csv
+```
+
+## Progreso reanudable y análisis detallado
+
+Todas las evaluaciones lanzadas con `python -m agente --evaluar` guardan ahora
+un JSON de progreso automático en `experimentos/resultados/progreso/`. Por
+ejemplo, la evaluación de v005 crea un fichero con este patrón:
+
+```text
+experimentos/resultados/progreso/agente_v005_golden_set_<hash>_citas-v4.json
+```
+
+El fichero conserva cada respuesta completa, sus llamadas a herramientas y el
+desglose de los evaluadores. También permite continuar una ejecución
+interrumpida sin pagar de nuevo las preguntas terminadas.
+
+Se puede elegir una ruta estable explícitamente:
+
+```bash
+python -m agente \
+  --variante experimentos.higinio.agente_v005 \
+  --evaluar golden_set.jsonl \
+  --salida resultados/agente_v005.csv \
+  --progreso experimentos/resultados/progreso/agente_v005.json
+```
+
+Para repetirla desde cero, hay que añadir `--reiniciar-progreso`.

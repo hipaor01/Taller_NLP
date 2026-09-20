@@ -171,3 +171,26 @@ class ConstructorAgente:
             motor=motor,
             evaluador=self._evaluador,
         )
+
+    def con_ruta_progreso(
+        self,
+        ruta_progreso: str | Path,
+    ) -> "ConstructorAgente":
+        """Copia la composición y activa progreso reanudable al evaluar."""
+        evaluador = self._evaluador
+        return ConstructorAgente(
+            nombre=self._nombre,
+            configuracion=self._configuracion,
+            corpus=self._corpus,
+            fabrica_herramientas=self._fabrica_herramientas,
+            middlewares=self._middlewares,
+            modelo=self._modelo,
+            control_peticiones=self._control_peticiones,
+            telemetria_auxiliar=self._telemetria_auxiliar,
+            k_retrieval=evaluador.k_retrieval,
+            tolerancia_absoluta=evaluador.tolerancia_absoluta,
+            tolerancia_relativa=evaluador.tolerancia_relativa,
+            numero_esperado=evaluador.numero_esperado,
+            minimo_comparativas=evaluador.minimo_comparativas,
+            ruta_progreso=ruta_progreso,
+        )

@@ -11,10 +11,20 @@ from pathlib import Path
 import pandas as pd
 
 from .interfaz import (
+    MODULO_BASELINE,
     VARIABLE_VARIANTE,
     evaluar,
     resumir,
     tabla_desde_manifiesto,
+)
+
+from taller_nlp import VERSION_PROTOCOLO_CITAS
+from taller_nlp.hashing import calcular_sha256
+
+
+_RAIZ_PROYECTO = Path(__file__).resolve().parents[1]
+_DIRECTORIO_PROGRESO = (
+    _RAIZ_PROYECTO / "experimentos" / "resultados" / "progreso"
 )
 
 
@@ -87,12 +97,48 @@ def _crear_parser() -> argparse.ArgumentParser:
             "defecto se usa el nombre del CSV detallado."
         ),
     )
+    parser.add_argument(
+        "--progreso",
+        type=Path,
+        metavar="RUTA_JSON",
+        help=(
+            "Fichero de progreso reanudable para --evaluar. Si se omite, "
+            "se crea automáticamente en experimentos/resultados/progreso/."
+        ),
+    )
+    parser.add_argument(
+        "--reiniciar-progreso",
+        action="store_true",
+        help="Descarta el progreso previo antes de evaluar desde cero.",
+    )
     return parser
+
+
+def _ruta_progreso_automatica(
+    ruta_golden: Path,
+    *,
+    modulo_variante: str,
+) -> Path:
+    """Deriva una ruta estable sin mezclar variantes ni golden sets."""
+    etiqueta = modulo_variante.rsplit(".", 1)[-1]
+    huella = calcular_sha256(ruta_golden)[:12]
+    return _DIRECTORIO_PROGRESO / (
+        f"{etiqueta}_{ruta_golden.stem}_{huella}_"
+        f"citas-v{VERSION_PROTOCOLO_CITAS}.json"
+    )
 
 
 def main(argumentos: Sequence[str] | None = None) -> int:
     parser = _crear_parser()
     opciones = parser.parse_args(argumentos)
+
+    if opciones.evaluar is None and (
+        opciones.progreso is not None or opciones.reiniciar_progreso
+    ):
+        parser.error(
+            "--progreso y --reiniciar-progreso solo se pueden usar con "
+            "--evaluar"
+        )
 
     if opciones.desde_manifiesto is not None:
         if opciones.variante is not None:
@@ -150,7 +196,23 @@ def main(argumentos: Sequence[str] | None = None) -> int:
             )
         if opciones.variante is not None:
             os.environ[VARIABLE_VARIANTE] = opciones.variante
-        tabla = evaluar(opciones.evaluar, salida=opciones.salida)
+        modulo_variante = os.getenv(VARIABLE_VARIANTE, MODULO_BASELINE).strip()
+        ruta_progreso = opciones.progreso or _ruta_progreso_automatica(
+            opciones.evaluar,
+            modulo_variante=modulo_variante,
+        )
+        if opciones.reiniciar_progreso and ruta_progreso.exists():
+            ruta_progreso.unlink()
+        print(
+            f"Progreso reanudable: {ruta_progreso.resolve()}",
+            file=sys.stderr,
+            flush=True,
+        )
+        tabla = evaluar(
+            opciones.evaluar,
+            salida=opciones.salida,
+            ruta_progreso=ruta_progreso,
+        )
 
     if opciones.resumir is not None and opciones.salida is not None:
         opciones.salida.parent.mkdir(parents=True, exist_ok=True)
