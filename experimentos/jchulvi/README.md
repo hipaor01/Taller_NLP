@@ -9,7 +9,8 @@ Consulta herramientas, prioriza XBRL para las cifras y devuelve una
 - **Agente y reescritura de consultas:** `deepseek/deepseek-v4-flash-0731`,
   mediante OpenRouter y el proveedor DeepInfra.
 - **Embeddings:** `voyageai/voyage-4-lite` mediante OpenRouter, con 1.024
-  dimensiones y normalización L2. Documentos y consultas se guardan en [embeddings/](embeddings/).
+  dimensiones y normalización L2. Solo los vectores del corpus se guardan en [embeddings/](embeddings/).
+  Las búsquedas densas e híbridas generan su vector en la nube, sin caché en memoria ni en disco.
 - **Evaluación:** comprobaciones locales del framework, protocolo 5. No hay
   modelo juez ni inferencia con modelos locales.
 
@@ -41,7 +42,7 @@ conserva BM25 como valor por defecto.
 ## Qdrant: configuración local
 
 Qdrant es la **base de datos vectorial**, no un modelo local. Los embeddings
-se calculan en la nube y se almacenan también en disco para no volver a pagarlos.
+del corpus se calculan en la nube y se almacenan en disco para no volver a pagarlos.
 
 - [qdrant_local.py](qdrant_local.py) ofrece `iniciar()`, `cargar()`, `consultar()`
   y `detener()`; el notebook usa `with qdrant.sesion():` para detenerlo al salir.
@@ -52,7 +53,7 @@ se calculan en la nube y se almacenan también en disco para no volver a pagarlo
   `ticker`, `fiscal_year` e `item`.
 - `cargar()` comprueba el modelo, los hashes y las dimensiones. Reutiliza la
   colección existente o carga los vectores con identificadores estables.
-- Los vectores compartibles están en `embeddings/`; los datos del contenedor,
+- Los archivos compartibles son `vectores.npy` y `manifest.json` en `embeddings/`; los datos del contenedor,
   en `resultados/estudio_v002/qdrant_storage/`. Detenerlo no borra ninguno.
 
 ## Entorno
@@ -86,16 +87,17 @@ Las llamadas nuevas a modelos y embeddings tienen coste.
 
 Ejecución del **20-09-2026**, protocolo 5: **40/40 evaluadas, 0 pendientes**.
 Notebook guardado con sus 15 celdas de código ejecutadas y sin errores de celda.
+Ejecución realizada sin caché de embeddings de consulta; se reutilizó el índice del corpus.
 
 | Conjunto | Aciertos |
 | --- | ---: |
-| Equipo | 19/20 |
+| Equipo | 20/20 |
 | Oficial | 17/20 |
-| **Total** | **36/40 · 90%** |
+| **Total** | **37/40 · 92,5%** |
 
-Fallaron `gjhh-019`, `of-001`, `of-004` y `of-017`: el agente terminó sin
+Fallaron `of-001`, `of-004` y `of-005`: el agente terminó sin
 respuesta estructurada. Se conservan los fallos y sus trazas, sin repetirlos.
-Coste registrado de las 40 respuestas: **0,0691 USD**, sin reescrituras ni embeddings.
+Coste registrado de las 40 respuestas: **0,0877 USD**, sin reescrituras ni embeddings.
 
 Estudio de búsqueda completo: **denso con metadatos, 74,1% de recall@5**,
 seleccionado frente a BM25 (29,6%) e híbrido (63,0%). La variante adicional
@@ -104,9 +106,9 @@ Se midieron las seis variantes sobre las 27 preguntas con ancla textual.
 
 Qdrant reutilizó los 1.749 vectores y quedó **detenido, con los datos conservados**.
 Una reescritura vacía interrumpió el primer arranque; se reanudó desde los checkpoints.
-Artefactos locales: `resultados/estudio_v002/campana_0d884de76bd86303/` y
-`resultados/estudio_v002/retrieval_s2_1f6c6eef2429b491/`. El notebook conserva los resultados visibles.
-Verificación del proyecto: **178 tests y 12 subtests correctos**. Sin commit ni push.
+Artefactos locales: `resultados/estudio_v002/campana_20f07e842e1626f8/` y
+`resultados/estudio_v002/retrieval_s2_860c5c920f627a6e/`. El notebook conserva los resultados visibles.
+Verificación del proyecto: **178 tests y 12 subtests correctos**.
 
 El evaluador comprueba cifras/unidades, herramientas esperadas y citas cuando
 corresponde. En las citas busca el prefijo normalizado de 120 caracteres en el

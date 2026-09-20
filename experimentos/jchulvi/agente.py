@@ -152,21 +152,6 @@ def embeddings_cloud(textos, *, modelo=MODELO_EMBEDDINGS, tipo="query"):
     return vectores / normas
 
 
-@lru_cache(maxsize=256)
-def vector_consulta_cloud(query, modelo):
-    """Reutiliza consultas en memoria y disco, también entre kernels y equipos."""
-    ruta = ruta_indice_cloud(modelo) / ("consulta_" + hashlib.sha256(query.encode()).hexdigest() + ".npy")
-    guardado = ruta.is_file()
-    vectores = np.load(ruta, allow_pickle=False) if guardado else embeddings_cloud([query], modelo=modelo)
-    validar_vectores(vectores, 1, CONTRATO_EMBEDDINGS["dimension"])
-    if not guardado:
-        ruta.parent.mkdir(parents=True, exist_ok=True)
-        with io.BytesIO() as contenido:
-            np.save(contenido, vectores)
-            guardar_atomico(ruta, contenido.getvalue())
-    return vectores[0]
-
-
 def ruta_indice_cloud(modelo=MODELO_EMBEDDINGS):
     fuente = baseline.crear_corpus_baseline()
     identidad = [fuente.sha256_chunks, modelo, CONTRATO_EMBEDDINGS]
@@ -302,7 +287,9 @@ class RecuperadorHibrido(Retriever):
         self.padres = corpus.troceador == "seccion-literal-v1"
 
     def _ranking_denso(self, query, ticker, fiscal_year, item, limite):
-        vector = vector_consulta_cloud(query, self.modelo_embeddings)
+        vectores = embeddings_cloud([query], modelo=self.modelo_embeddings)
+        validar_vectores(vectores, 1, CONTRATO_EMBEDDINGS["dimension"])
+        vector = vectores[0]
         if not self.qdrant_url:
             mascara = np.ones(len(self.hijos), dtype=bool)
             for campo, valor in (('ticker', ticker), ('fiscal_year', fiscal_year), ('item', item)):
