@@ -49,6 +49,15 @@ class RespuestaFinanciera(BaseModel):
         description="Identificador del fragmento citado, para verificar",
     )
 
+    @model_validator(mode="after")
+    def validar_contenido(self) -> "RespuestaFinanciera":
+        """ToolStrategy devuelve estos errores de campos al modelo."""
+        if not self.respuesta.strip():
+            raise ValueError("respuesta no puede estar vacía; contesta o explica la limitación.")
+        if self.cifra is None and self.unidad is not None:
+            raise ValueError("Si cifra es null, unidad debe ser null; no inventes una cifra.")
+        return self
+
 
 class LlamadaHerramienta(BaseModel):
     """Traza normalizada de una llamada a una herramienta del agente."""
