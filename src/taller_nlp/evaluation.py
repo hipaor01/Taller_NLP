@@ -234,7 +234,7 @@ class EvaluadorFinanciero:
         cita_respalda = None
         justificacion_cita = None
         recall_at_k = None
-        if caso.familia in {"extractiva", "comparativa"}:
+        if self._requiere_evidencia_textual(caso):
             cita_existe, cita_respalda = self._evaluar_citas(respuesta)
             recall_at_k = self._calcular_recall(caso, respuesta)
             if not cita_existe:
@@ -254,6 +254,11 @@ class EvaluadorFinanciero:
             recall_at_k=recall_at_k,
             observaciones=tuple(observaciones),
         )
+
+    @staticmethod
+    def _requiere_evidencia_textual(caso: CasoGolden) -> bool:
+        """Decide si las citas y el recall son aplicables al caso."""
+        return "search_filings" in caso.herramienta_esperada
 
     def _evaluar_citas(
         self, respuesta: RespuestaAgente

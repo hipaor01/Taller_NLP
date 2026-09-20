@@ -259,6 +259,109 @@ class TestEvaluadorFinanciero(unittest.TestCase):
                 informe_sin_xbrl.resultados[0].trayectoria_correcta
             )
 
+    def test_comparativa_solo_xbrl_no_exige_cita_ni_calcula_recall(self) -> None:
+        with tempfile.TemporaryDirectory() as temporal:
+            raiz = Path(temporal)
+            corpus, _ = crear_corpus_temporal(raiz / "corpus")
+            ruta = raiz / "comparativa_xbrl.jsonl"
+            datos_caso = caso_comparativo()
+            datos_caso["herramienta_esperada"] = ["get_xbrl_fact"]
+            escribir_jsonl(ruta, [datos_caso])
+            evaluador = EvaluadorFinanciero(corpus)
+            llamadas = tuple(
+                LlamadaHerramienta(
+                    id=f"xbrl-{ejercicio}",
+                    nombre="get_xbrl_fact",
+                    argumentos={
+                        "ticker": "ACME",
+                        "fiscal_year": ejercicio,
+                        "concept": "NetIncomeLoss",
+                    },
+                    duracion_ms=0,
+                    resultado=f"{valor} USD",
+                )
+                for ejercicio, valor in ((2023, 80), (2024, 100))
+            )
+            respuesta = RespuestaAgente(
+                respuesta="El beneficio aumentó de 80 a 100 USD.",
+                cifra=100,
+                unidad="USD",
+                fuente="xbrl",
+                llamadas=llamadas,
+                latencia_ms=1,
+            )
+
+            informe = evaluador.evaluar(
+                nombre_agente="comparativa-xbrl",
+                responder=lambda _: respuesta,
+                ruta_jsonl=ruta,
+            )
+
+            resultado = informe.resultados[0]
+            self.assertIsNone(resultado.cita_existe)
+            self.assertIsNone(resultado.cita_respalda)
+            self.assertIsNone(resultado.recall_at_k)
+            self.assertTrue(resultado.acierto)
+            self.assertIsNone(informe.recall_at_k_medio)
+            self.assertEqual(informe.cobertura_recall, 0)
+            self.assertEqual(resultado.observaciones, ())
+
+    def test_comparativa_con_busqueda_sigue_exigiendo_cita(self) -> None:
+        with tempfile.TemporaryDirectory() as temporal:
+            raiz = Path(temporal)
+            corpus, _ = crear_corpus_temporal(raiz / "corpus")
+            ruta = raiz / "comparativa_hibrida.jsonl"
+            escribir_jsonl(ruta, [caso_comparativo()])
+            evaluador = EvaluadorFinanciero(corpus)
+            llamadas = (
+                LlamadaHerramienta(
+                    id="xbrl-2024",
+                    nombre="get_xbrl_fact",
+                    argumentos={
+                        "ticker": "ACME",
+                        "fiscal_year": 2024,
+                        "concept": "NetIncomeLoss",
+                    },
+                    duracion_ms=0,
+                    resultado="100 USD",
+                ),
+                LlamadaHerramienta(
+                    id="search-2024",
+                    nombre="search_filings",
+                    argumentos={
+                        "query": "operational disruption",
+                        "ticker": "ACME",
+                        "fiscal_year": 2024,
+                        "item": "1A",
+                        "k": 5,
+                    },
+                    duracion_ms=0,
+                    chunk_ids=("ACME-2024-1A-0000",),
+                    resultado=TEXTO_2024,
+                ),
+            )
+            respuesta = RespuestaAgente(
+                respuesta="Aumentó de 80 a 100 USD por disrupciones.",
+                cifra=100,
+                unidad="USD",
+                fuente="ambas",
+                llamadas=llamadas,
+                latencia_ms=1,
+            )
+
+            informe = evaluador.evaluar(
+                nombre_agente="comparativa-hibrida",
+                responder=lambda _: respuesta,
+                ruta_jsonl=ruta,
+            )
+
+            resultado = informe.resultados[0]
+            self.assertFalse(resultado.cita_existe)
+            self.assertFalse(resultado.cita_respalda)
+            self.assertEqual(resultado.recall_at_k, 1)
+            self.assertFalse(resultado.acierto)
+            self.assertIn("Falta una cita", resultado.observaciones[0])
+
     def test_evalua_cifra_cita_trayectoria_recall_y_agregados(self) -> None:
         with tempfile.TemporaryDirectory() as temporal:
             raiz = Path(temporal)

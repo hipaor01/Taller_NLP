@@ -22,7 +22,7 @@ NombreHerramienta = Literal[
 
 FuenteRespuesta = Literal["xbrl", "texto", "ambas", "ninguna"]
 FamiliaPregunta = Literal["extractiva", "numerica", "comparativa"]
-VERSION_PROTOCOLO_CITAS = 4
+VERSION_PROTOCOLO_CITAS = 5
 
 
 class RespuestaFinanciera(BaseModel):
@@ -201,11 +201,18 @@ class ResultadoPregunta(BaseModel):
     @model_validator(mode="after")
     def validar_criterios_de_la_familia(self) -> "ResultadoPregunta":
         """Exige que estén evaluados todos los criterios aplicables."""
-        if self.familia in {"extractiva", "comparativa"}:
+        if self.familia == "extractiva":
             if self.cita_existe is None or self.cita_respalda is None:
                 raise ValueError(
                     f"La familia {self.familia} requiere evaluar la cita."
                 )
+        if self.familia == "comparativa" and (
+            (self.cita_existe is None) != (self.cita_respalda is None)
+        ):
+            raise ValueError(
+                "Una comparativa debe evaluar ambos criterios de cita o "
+                "marcar ambos como no aplicables."
+            )
         if self.familia in {"numerica", "comparativa"}:
             if self.cifra_correcta is None:
                 raise ValueError(
@@ -218,7 +225,7 @@ class ResultadoPregunta(BaseModel):
     def acierto(self) -> bool:
         """Indica si se cumplen todos los criterios de su familia."""
         criterios = [self.trayectoria_correcta]
-        if self.familia in {"extractiva", "comparativa"}:
+        if self.cita_existe is not None:
             criterios.extend([self.cita_existe, self.cita_respalda])
         if self.familia in {"numerica", "comparativa"}:
             criterios.append(self.cifra_correcta)
@@ -237,7 +244,7 @@ class InformeEvaluacion(BaseModel):
     tolerancia_absoluta: float = Field(ge=0)
     tolerancia_relativa: float = Field(ge=0)
     metodo_soporte_citas: str = Field(default="no_especificado", min_length=1)
-    version_protocolo_citas: Literal[4] = VERSION_PROTOCOLO_CITAS
+    version_protocolo_citas: Literal[5] = VERSION_PROTOCOLO_CITAS
 
     @model_validator(mode="after")
     def validar_ids_unicos(self) -> "InformeEvaluacion":

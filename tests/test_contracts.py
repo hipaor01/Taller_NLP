@@ -89,6 +89,35 @@ class TestResultadosEInforme(unittest.TestCase):
         self.assertTrue(extractiva.acierto)
         self.assertFalse(numerica.acierto)
 
+    def test_comparativa_xbrl_admite_citas_no_aplicables(self) -> None:
+        comparativa = ResultadoPregunta(
+            id_pregunta="q-xbrl",
+            familia="comparativa",
+            respuesta_agente=respuesta(cifra=100, unidad="USD", fuente="xbrl"),
+            cifra_correcta=True,
+            trayectoria_correcta=True,
+        )
+
+        self.assertIsNone(comparativa.cita_existe)
+        self.assertIsNone(comparativa.cita_respalda)
+        self.assertTrue(comparativa.acierto)
+
+    def test_comparativa_no_admite_aplicabilidad_parcial_de_citas(self) -> None:
+        with self.assertRaisesRegex(ValidationError, "ambos criterios"):
+            ResultadoPregunta(
+                id_pregunta="q-inconsistente",
+                familia="comparativa",
+                respuesta_agente=respuesta(
+                    cifra=100,
+                    unidad="USD",
+                    fuente="ambas",
+                ),
+                cifra_correcta=True,
+                cita_existe=True,
+                cita_respalda=None,
+                trayectoria_correcta=True,
+            )
+
     def test_informe_agrega_metricas_y_coberturas(self) -> None:
         resultados = (
             ResultadoPregunta(
