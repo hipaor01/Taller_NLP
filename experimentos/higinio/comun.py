@@ -16,6 +16,7 @@ from taller_nlp import (
     ControlPeticionesModelo,
     CorpusVariant,
     RegistroTelemetriaAuxiliar,
+    RespuestaFinanciera,
     Retriever,
 )
 
@@ -45,4 +46,32 @@ def ensamblar_variante_retrieval(
         tolerancia_relativa=0.01,
         numero_esperado=None,
         minimo_comparativas=0,
+    )
+
+
+def extender_variante(
+    nombre: str,
+    base: ConstructorAgente,
+    *,
+    middlewares: Sequence[AgentMiddleware],
+    esquema_respuesta: type[RespuestaFinanciera] | None = None,
+) -> ConstructorAgente:
+    """Extiende una variante sin alterar su configuración de evaluación."""
+    evaluador = base.evaluador
+    return ConstructorAgente(
+        nombre=nombre,
+        configuracion=base.configuracion,
+        corpus=base.corpus,
+        fabrica_herramientas=base.fabrica_herramientas,
+        middlewares=(*base.middlewares, *middlewares),
+        esquema_respuesta=esquema_respuesta or base.esquema_respuesta,
+        modelo=base.modelo,
+        control_peticiones=base.control_peticiones,
+        telemetria_auxiliar=base.telemetria_auxiliar,
+        k_retrieval=evaluador.k_retrieval,
+        tolerancia_absoluta=evaluador.tolerancia_absoluta,
+        tolerancia_relativa=evaluador.tolerancia_relativa,
+        numero_esperado=evaluador.numero_esperado,
+        minimo_comparativas=evaluador.minimo_comparativas,
+        ruta_progreso=evaluador.ruta_progreso,
     )

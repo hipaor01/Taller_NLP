@@ -211,6 +211,96 @@ python -m agente \
   --salida resultados/resumen_agente_v007.csv
 ```
 
+## `agente_v008`: v005 + guardrail comparativo
+
+Esta variante parte directamente de v005 para medir de forma aislada el
+efecto del guardrail. Detecta preguntas que comparan explícitamente dos
+ejercicios y, antes de aceptar la respuesta estructurada, exige que exista una
+llamada exitosa a `search_filings` con resultados y que la respuesta cite uno
+de los `chunk_id` recuperados.
+
+Si falta la búsqueda o la cita, devuelve una instrucción de corrección al
+modelo. Solo permite una corrección por ejecución para evitar bucles. El
+guardrail no consulta el golden set, no ejecuta búsquedas por su cuenta y no
+incorpora el reparador de citas de v007.
+
+Para evaluarla:
+
+```bash
+python -m agente \
+  --variante experimentos.higinio.agente_v008 \
+  --evaluar golden_set.jsonl \
+  --salida resultados/agente_v008.csv
+```
+
+Para generar su resumen:
+
+```bash
+python -m agente \
+  --resumir resultados/agente_v008.csv \
+  --etiqueta agente_v008 \
+  --salida resultados/resumen_agente_v008.csv
+```
+
+## `agente_v009`: v008 + reparación determinista de citas
+
+Esta variante conserva el guardrail comparativo de v008 y añade el
+`VerificadorCitas` probado en v007. En los hooks `after_model`, LangChain
+recorre los middlewares en orden inverso: el verificador puede reparar primero
+un par `cita`/`chunk_id` usando los resultados reales de `search_filings`; el
+guardrail evalúa después la respuesta ya reparada y solo solicita otra vuelta
+al modelo cuando sigue faltando evidencia recuperada.
+
+Para evaluarla:
+
+```bash
+python -m agente \
+  --variante experimentos.higinio.agente_v009 \
+  --evaluar golden_set.jsonl \
+  --salida resultados/agente_v009.csv
+```
+
+Para generar su resumen:
+
+```bash
+python -m agente \
+  --resumir resultados/agente_v009.csv \
+  --etiqueta agente_v009 \
+  --salida resultados/resumen_agente_v009.csv
+```
+
+## `agente_v010`: v009 + contrato comparativo estricto
+
+Esta variante conserva todos los componentes de v009 y sustituye únicamente
+su esquema de respuesta. El nuevo contrato clasifica la salida como
+extractiva, numérica o comparativa. En las comparativas exige los ejercicios y
+valores inicial y final, además del `ticker`, la unidad y `fuente="ambas"`.
+
+Una vez validada la salida, normaliza de forma determinista `cifra` y
+`ejercicio` al valor y ejercicio finales. También recalcula las variaciones
+absoluta y porcentual. Así, una variación calculada por el modelo nunca puede
+ocupar accidentalmente el campo `cifra` que puntúa el evaluador. Las citas
+siguen bajo el guardrail y el verificador de v009, evitando añadir otro
+middleware con su propio ciclo de corrección.
+
+Para evaluarla:
+
+```bash
+python -m agente \
+  --variante experimentos.higinio.agente_v010 \
+  --evaluar golden_set.jsonl \
+  --salida resultados/agente_v010.csv
+```
+
+Para generar su resumen:
+
+```bash
+python -m agente \
+  --resumir resultados/agente_v010.csv \
+  --etiqueta agente_v010 \
+  --salida resultados/resumen_agente_v010.csv
+```
+
 ## Progreso reanudable y análisis detallado
 
 Todas las evaluaciones lanzadas con `python -m agente --evaluar` guardan ahora

@@ -12,6 +12,7 @@ from taller_nlp import (
     ConstructorAgente,
     RegistroTelemetriaAuxiliar,
     RespuestaAgente,
+    RespuestaFinanciera,
 )
 
 from tests.support import crear_corpus_temporal, crear_fabrica_prueba
@@ -27,6 +28,7 @@ class MotorControlado:
         corpus,
         *,
         middlewares=(),
+        esquema_respuesta=RespuestaFinanciera,
         modelo=None,
         control_peticiones=None,
         checkpointer=None,
@@ -38,6 +40,7 @@ class MotorControlado:
                 "herramientas": herramientas,
                 "corpus": corpus,
                 "middlewares": middlewares,
+                "esquema_respuesta": esquema_respuesta,
                 "modelo": modelo,
                 "control_peticiones": control_peticiones,
                 "checkpointer": checkpointer,
@@ -81,6 +84,10 @@ class TestConstructorAgente(unittest.TestCase):
             construccion = MotorControlado.construcciones[0]
             self.assertIs(construccion["configuracion"], configuracion)
             self.assertIs(construccion["corpus"], corpus)
+            self.assertIs(
+                construccion["esquema_respuesta"],
+                RespuestaFinanciera,
+            )
             self.assertIs(
                 construccion["control_peticiones"],
                 constructor.control_peticiones,
@@ -197,6 +204,7 @@ class TestConstructorAgente(unittest.TestCase):
                 original.control_peticiones,
             )
             self.assertIs(copia.telemetria_auxiliar, telemetria)
+            self.assertIs(copia.esquema_respuesta, original.esquema_respuesta)
             self.assertEqual(copia.evaluador.k_retrieval, 3)
             self.assertEqual(copia.evaluador.tolerancia_absoluta, 0.5)
             self.assertEqual(copia.evaluador.tolerancia_relativa, 0.01)
@@ -204,6 +212,21 @@ class TestConstructorAgente(unittest.TestCase):
             self.assertEqual(copia.evaluador.minimo_comparativas, 1)
             self.assertEqual(copia.evaluador.ruta_progreso, ruta.resolve())
             self.assertIsNone(original.evaluador.ruta_progreso)
+
+    def test_rechaza_un_esquema_de_respuesta_incompatible(self) -> None:
+        with tempfile.TemporaryDirectory() as temporal:
+            corpus, _ = crear_corpus_temporal(Path(temporal))
+            configuracion = ConfiguracionAgente(
+                modelo="modelo", system_prompt="prompt"
+            )
+            with self.assertRaisesRegex(TypeError, "RespuestaFinanciera"):
+                ConstructorAgente(
+                    "agente",
+                    configuracion,
+                    corpus,
+                    crear_fabrica_prueba(corpus),
+                    esquema_respuesta=RespuestaAgente,
+                )
 
 
 if __name__ == "__main__":

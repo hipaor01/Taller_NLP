@@ -17,6 +17,7 @@ from .corpus import CorpusVariant
 from .evaluation import EvaluadorFinanciero
 from .langchain_engine import MotorLangChain
 from .model_resilience import ControlPeticionesModelo
+from .contracts import RespuestaFinanciera
 from .tool_factory import FabricaHerramientas
 
 
@@ -37,6 +38,7 @@ class ConstructorAgente:
         "_fabrica_herramientas",
         "_evaluador",
         "_middlewares",
+        "_esquema_respuesta",
         "_modelo",
         "_control_peticiones",
         "_telemetria_auxiliar",
@@ -50,6 +52,7 @@ class ConstructorAgente:
         fabrica_herramientas: FabricaHerramientas,
         *,
         middlewares: Sequence[AgentMiddleware] = (),
+        esquema_respuesta: type[RespuestaFinanciera] = RespuestaFinanciera,
         modelo: BaseChatModel | None = None,
         control_peticiones: ControlPeticionesModelo | None = None,
         telemetria_auxiliar: RegistroTelemetriaAuxiliar | None = None,
@@ -85,6 +88,14 @@ class ConstructorAgente:
         self._corpus = corpus
         self._fabrica_herramientas = fabrica_herramientas
         self._middlewares = tuple(middlewares)
+        if not isinstance(esquema_respuesta, type) or not issubclass(
+            esquema_respuesta,
+            RespuestaFinanciera,
+        ):
+            raise TypeError(
+                "esquema_respuesta debe heredar de RespuestaFinanciera."
+            )
+        self._esquema_respuesta = esquema_respuesta
         self._modelo = modelo
         self._control_peticiones = control_peticiones or (
             ControlPeticionesModelo.desde_configuracion(configuracion)
@@ -134,6 +145,10 @@ class ConstructorAgente:
         return self._middlewares
 
     @property
+    def esquema_respuesta(self) -> type[RespuestaFinanciera]:
+        return self._esquema_respuesta
+
+    @property
     def modelo(self) -> BaseChatModel | None:
         return self._modelo
 
@@ -157,6 +172,7 @@ class ConstructorAgente:
             herramientas=herramientas,
             corpus=self._corpus,
             middlewares=self._middlewares,
+            esquema_respuesta=self._esquema_respuesta,
             modelo=self._modelo,
             control_peticiones=self._control_peticiones,
             checkpointer=checkpointer,
@@ -184,6 +200,7 @@ class ConstructorAgente:
             corpus=self._corpus,
             fabrica_herramientas=self._fabrica_herramientas,
             middlewares=self._middlewares,
+            esquema_respuesta=self._esquema_respuesta,
             modelo=self._modelo,
             control_peticiones=self._control_peticiones,
             telemetria_auxiliar=self._telemetria_auxiliar,

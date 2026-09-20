@@ -89,6 +89,7 @@ class MotorLangChain:
         corpus: CorpusVariant,
         *,
         middlewares: Sequence[AgentMiddleware] = (),
+        esquema_respuesta: type[RespuestaFinanciera] = RespuestaFinanciera,
         modelo: BaseChatModel | None = None,
         control_peticiones: ControlPeticionesModelo | None = None,
         checkpointer: BaseCheckpointSaver | None = None,
@@ -98,6 +99,14 @@ class MotorLangChain:
         self._herramientas = herramientas
         self._corpus = corpus
         self._middlewares_usuario = tuple(middlewares)
+        if not isinstance(esquema_respuesta, type) or not issubclass(
+            esquema_respuesta,
+            RespuestaFinanciera,
+        ):
+            raise TypeError(
+                "esquema_respuesta debe heredar de RespuestaFinanciera."
+            )
+        self._esquema_respuesta = esquema_respuesta
         self._control_peticiones = control_peticiones or (
             ControlPeticionesModelo.desde_configuracion(configuracion)
         )
@@ -113,7 +122,7 @@ class MotorLangChain:
             tools=herramientas.herramientas,
             system_prompt=configuracion.system_prompt,
             middleware=middlewares_agente,
-            response_format=ToolStrategy(RespuestaFinanciera),
+            response_format=ToolStrategy(self._esquema_respuesta),
             name="agente_financiero",
             checkpointer=checkpointer,
         )
@@ -181,6 +190,10 @@ class MotorLangChain:
     @property
     def corpus(self) -> CorpusVariant:
         return self._corpus
+
+    @property
+    def esquema_respuesta(self) -> type[RespuestaFinanciera]:
+        return self._esquema_respuesta
 
     @property
     def checkpointer(self) -> BaseCheckpointSaver | None:

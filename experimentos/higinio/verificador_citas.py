@@ -9,17 +9,16 @@ from types import MappingProxyType
 from typing import Any
 
 from langchain.agents.middleware import AgentMiddleware, AgentState
-from langchain_core.messages import AIMessage, ToolMessage
 from langgraph.runtime import Runtime
 from pydantic import JsonValue
 
+from experimentos.higinio.traza import extraer_chunks_recuperados_busqueda
 from taller_nlp import CorpusVariant, RespuestaFinanciera
 from taller_nlp.citas import (
     cargar_fragmentos,
     cita_esta_respaldada,
     normalizar_texto,
 )
-from taller_nlp.retrieval import extraer_chunk_ids_formateados
 
 
 _PALABRA = re.compile(r"[^\W\d_]{3,}", re.UNICODE)
@@ -59,7 +58,9 @@ class VerificadorCitas(AgentMiddleware):
         if cita is None or not cita.strip():
             return None
 
-        recuperados = self._extraer_chunks_recuperados(state.get("messages", ()))
+        recuperados = extraer_chunks_recuperados_busqueda(
+            state.get("messages", ())
+        )
         if not recuperados:
             return None
 
@@ -104,32 +105,6 @@ class VerificadorCitas(AgentMiddleware):
         return fragmento is not None and cita_esta_respaldada(
             cita, fragmento.texto
         )
-
-    @staticmethod
-    def _extraer_chunks_recuperados(
-        mensajes: object,
-    ) -> tuple[str, ...]:
-        if not isinstance(mensajes, (list, tuple)):
-            return ()
-        ids_llamadas = {
-            llamada.get("id")
-            for mensaje in mensajes
-            if isinstance(mensaje, AIMessage)
-            for llamada in mensaje.tool_calls
-            if llamada.get("name") == "search_filings" and llamada.get("id")
-        }
-        encontrados: list[str] = []
-        for mensaje in mensajes:
-            if not isinstance(mensaje, ToolMessage) or mensaje.status == "error":
-                continue
-            es_busqueda = (
-                mensaje.name == "search_filings"
-                or mensaje.tool_call_id in ids_llamadas
-            )
-            if not es_busqueda:
-                continue
-            encontrados.extend(extraer_chunk_ids_formateados(mensaje.text))
-        return tuple(dict.fromkeys(encontrados))
 
     @classmethod
     def _seleccionar_linea_literal(
