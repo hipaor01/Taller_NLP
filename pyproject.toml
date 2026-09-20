@@ -24,6 +24,7 @@ dependencies = [
 [project.optional-dependencies]
 notebook = [
     "ipykernel>=6.29,<8",
+    "nbconvert==7.17.1",
 ]
 test = [
     "pytest>=8,<10",

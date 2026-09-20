@@ -9,6 +9,7 @@ from taller_nlp import (
     InformeEvaluacion,
     LlamadaHerramienta,
     RespuestaAgente,
+    RespuestaFinanciera,
     ResultadoPregunta,
 )
 
@@ -24,6 +25,14 @@ def respuesta(**cambios: object) -> RespuestaAgente:
 
 
 class TestContratosRespuesta(unittest.TestCase):
+    def test_salida_estructurada_valida_campos_antes_del_guardrail(self) -> None:
+        base = {"respuesta": "Dato consultado.", "fuente": "xbrl"}
+        for cambios in ({"respuesta": ""}, {"respuesta": " \t"}, {"unidad": "USD"}):
+            with self.subTest(cambios=cambios), self.assertRaises(ValidationError):
+                RespuestaFinanciera(**(base | cambios))
+        self.assertIsNone(RespuestaFinanciera(**base).unidad)
+        self.assertEqual(RespuestaFinanciera(**base, cifra=0, unidad="USD").cifra, 0)
+
     def test_llamada_exige_exactamente_resultado_o_error(self) -> None:
         base = {
             "id": "call-1",
