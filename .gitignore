@@ -50,3 +50,9 @@ htmlcov/
 # Salidas reproducibles: se regeneran a partir de código y manifiestos
 experimentos/**/resultados/
 experimentos/**/artefactos/
+
+# Golden set adicional reservado para pruebas locales
+golden_set_extra.jsonl
+
+# Resultados de las pruebas locales contra el golden set adicional
+resultados/**/*_extra.csv

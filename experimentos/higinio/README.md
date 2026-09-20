@@ -301,6 +301,187 @@ python -m agente \
   --salida resultados/resumen_agente_v010.csv
 ```
 
+## `agente_v011`: v009 + contrato comparativo tolerante
+
+Esta variante vuelve a partir de v009 y conserva sus tres middlewares. Añade
+los mismos campos comparativos de v010, pero todos son opcionales y no rechaza
+la respuesta cuando faltan datos, los periodos están invertidos o la fuente no
+es `"ambas"`. Si recibe `cifra_final`, la copia de forma determinista a
+`cifra`; cuando también están presentes ambos valores, recalcula las variaciones.
+
+El contrato también puede inferir una comparativa cuando el modelo proporciona
+los dos ejercicios y los dos valores aunque omita `tipo_respuesta`. De este
+modo se mantiene la desambiguación buscada en v010 sin convertir campos
+auxiliares ausentes en reintentos de salida estructurada.
+
+Para evaluarla desde cero:
+
+```bash
+python -m agente \
+  --variante experimentos.higinio.agente_v011 \
+  --evaluar golden_set.jsonl \
+  --salida resultados/agente_v011.csv \
+  --reiniciar-progreso
+```
+
+Para generar su resumen:
+
+```bash
+python -m agente \
+  --resumir resultados/agente_v011.csv \
+  --etiqueta agente_v011 \
+  --salida resultados/resumen_agente_v011.csv
+```
+
+## `agente_v012`: v011 + instrucciones comparativas preventivas
+
+Esta variante conserva el contrato tolerante y los tres middlewares de v011.
+Solo amplía el prompt del sistema para que, antes de responder una comparativa,
+el modelo consulte ambos ejercicios con el mismo concepto XBRL, recupere
+evidencia mediante `search_filings` y copie una `cita` literal junto con su
+`chunk_id`.
+
+Las instrucciones evitan búsquedas innecesarias: si el primer resultado es
+pertinente, debe responder sin repetir la consulta; cuando no lo sea, solo
+permite una reformulación. La normalización determinista de v011 sigue fijando
+la cifra principal al ejercicio final cuando el modelo proporciona ese campo.
+
+Para evaluarla desde cero:
+
+```bash
+python -m agente \
+  --variante experimentos.higinio.agente_v012 \
+  --evaluar golden_set.jsonl \
+  --salida resultados/agente_v012.csv \
+  --reiniciar-progreso
+```
+
+Para generar su resumen:
+
+```bash
+python -m agente \
+  --resumir resultados/agente_v012.csv \
+  --etiqueta agente_v012 \
+  --salida resultados/resumen_agente_v012.csv
+```
+
+## `agente_v013`: v012 + selección dirigida del fragmento
+
+Esta variante conserva todos los componentes de v012 y amplía solamente su
+prompt. La primera búsqueda comparativa deja que compitan Items 7 y 8, usando
+el nombre financiero en inglés y los dos valores conocidos. El agente debe
+preferir una línea o tabla que contenga la magnitud y ambos importes, en lugar
+de citar comentarios genéricos que solo mencionen el tema.
+
+Cuando la primera búsqueda no recupera evidencia suficiente, la única
+reformulación permitida se dirige a Item 8 para estados financieros y tablas, o
+a Item 7 si la pregunta solicita causas o explicaciones de la dirección.
+
+Para evaluarla desde cero:
+
+```bash
+python -m agente \
+  --variante experimentos.higinio.agente_v013 \
+  --evaluar golden_set.jsonl \
+  --salida resultados/agente_v013.csv \
+  --reiniciar-progreso
+```
+
+Para generar su resumen:
+
+```bash
+python -m agente \
+  --resumir resultados/agente_v013.csv \
+  --etiqueta agente_v013 \
+  --salida resultados/resumen_agente_v013.csv
+```
+
+## `agente_v014`: v012 + recuperación híbrida BM25-densa
+
+Esta variante conserva la configuración, el prompt, el contrato de salida y
+los middlewares de v012. Sustituye únicamente el recuperador denso filtrado por
+el recuperador híbrido BM25-denso con fusión RRF ya validado en v002.
+
+El objetivo es mejorar la recuperación de fragmentos con términos literales
+relevantes sin perder la similitud semántica ni los filtros de ticker,
+ejercicio fiscal e item.
+
+Para evaluarla desde cero:
+
+```bash
+python -m agente \
+  --variante experimentos.higinio.agente_v014 \
+  --evaluar golden_set.jsonl \
+  --salida resultados/agente_v014.csv \
+  --reiniciar-progreso
+```
+
+Para generar su resumen:
+
+```bash
+python -m agente \
+  --resumir resultados/agente_v014.csv \
+  --etiqueta agente_v014 \
+  --salida resultados/resumen_agente_v014.csv
+```
+
+## `agente_v015`: v013 + recuperación híbrida BM25-densa
+
+Esta variante conserva la selección dirigida de evidencia de v013 y sustituye
+únicamente su recuperador denso filtrado por el recuperador híbrido BM25-denso
+con fusión RRF de v002. Así combina la elección explícita del Item 8 para tablas
+financieras comparativas con la mejora de ranking léxico-semántico observada en
+v014.
+
+Para evaluarla desde cero:
+
+```bash
+python -m agente \
+  --variante experimentos.higinio.agente_v015 \
+  --evaluar golden_set.jsonl \
+  --salida resultados/agente_v015.csv \
+  --reiniciar-progreso
+```
+
+Para generar su resumen:
+
+```bash
+python -m agente \
+  --resumir resultados/agente_v015.csv \
+  --etiqueta agente_v015 \
+  --salida resultados/resumen_agente_v015.csv
+```
+
+## `agente_v016`: v015 + Gemma 4 26B A4B
+
+Esta variante conserva íntegramente el prompt, el contrato, los middlewares y
+el recuperador híbrido de v015. Sustituye únicamente el modelo principal por
+`openrouter:google/gemma-4-26b-a4b-it` y fija para el experimento unas tarifas
+de 0,042 USD por millón de tokens de entrada y 0,22 USD por millón de tokens de
+salida.
+
+La configuración explícita impide que `TALLER_MODELO_AGENTE` cambie el modelo
+de esta variante y permite comparar su coste y fiabilidad agéntica con v015.
+
+Para evaluarla desde cero:
+
+```bash
+python -m agente \
+  --variante experimentos.higinio.agente_v016 \
+  --evaluar golden_set.jsonl \
+  --salida resultados/agente_v016.csv \
+  --reiniciar-progreso
+```
+
+Para generar su resumen:
+
+```bash
+python -m agente \
+  --resumir resultados/agente_v016.csv \
+  --etiqueta agente_v016 \
+  --salida resultados/resumen_agente_v016.csv
+```
+
 ## Progreso reanudable y análisis detallado
 
 Todas las evaluaciones lanzadas con `python -m agente --evaluar` guardan ahora

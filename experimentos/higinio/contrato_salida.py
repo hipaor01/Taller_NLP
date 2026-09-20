@@ -12,12 +12,13 @@ from taller_nlp import RespuestaFinanciera
 TipoRespuesta = Literal["extractiva", "numerica", "comparativa"]
 
 
-class RespuestaFinancieraEstricta(RespuestaFinanciera):
-    """Desambigua el valor canónico devuelto por una comparativa temporal."""
+class _RespuestaFinancieraComparativa(RespuestaFinanciera):
+    """Campos compartidos por los contratos comparativos experimentales."""
 
     model_config = ConfigDict(extra="forbid")
 
-    tipo_respuesta: TipoRespuesta = Field(
+    tipo_respuesta: TipoRespuesta | None = Field(
+        default=None,
         description=(
             "Clasificación de la pregunta: extractiva, numerica o comparativa"
         )
@@ -73,6 +74,31 @@ class RespuestaFinancieraEstricta(RespuestaFinanciera):
         ),
     )
 
+    def _normalizar_valores_disponibles(self) -> None:
+        """Canoniza el periodo final sin exigir que todos los campos existan."""
+        if self.cifra_final is not None:
+            self.cifra = self.cifra_final
+            if self.ejercicio_final is not None:
+                self.ejercicio = self.ejercicio_final
+        if self.cifra_inicial is None or self.cifra_final is None:
+            return
+        self.variacion_absoluta = self.cifra_final - self.cifra_inicial
+        self.variacion_porcentual = (
+            None
+            if self.cifra_inicial == 0
+            else self.variacion_absoluta / abs(self.cifra_inicial) * 100
+        )
+
+
+class RespuestaFinancieraEstricta(_RespuestaFinancieraComparativa):
+    """Desambigua el valor canónico y rechaza comparativas incompletas."""
+
+    tipo_respuesta: TipoRespuesta = Field(
+        description=(
+            "Clasificación de la pregunta: extractiva, numerica o comparativa"
+        )
+    )
+
     @model_validator(mode="after")
     def normalizar_comparativa(self) -> "RespuestaFinancieraEstricta":
         """Fija la cifra evaluable al valor del ejercicio final."""
@@ -104,12 +130,26 @@ class RespuestaFinancieraEstricta(RespuestaFinanciera):
                 "ejercicio_final debe ser posterior a ejercicio_inicial."
             )
 
-        self.cifra = self.cifra_final
-        self.ejercicio = self.ejercicio_final
-        self.variacion_absoluta = self.cifra_final - self.cifra_inicial
-        self.variacion_porcentual = (
-            None
-            if self.cifra_inicial == 0
-            else self.variacion_absoluta / abs(self.cifra_inicial) * 100
+        self._normalizar_valores_disponibles()
+        return self
+
+
+class RespuestaFinancieraTolerante(_RespuestaFinancieraComparativa):
+    """Normaliza comparativas sin convertir campos ausentes en un error."""
+
+    @model_validator(mode="after")
+    def normalizar_comparativa(self) -> "RespuestaFinancieraTolerante":
+        """Aplica la normalización solo cuando hay indicios suficientes."""
+        comparativa_declarada = self.tipo_respuesta == "comparativa"
+        comparativa_inferida = all(
+            valor is not None
+            for valor in (
+                self.ejercicio_inicial,
+                self.cifra_inicial,
+                self.ejercicio_final,
+                self.cifra_final,
+            )
         )
+        if comparativa_declarada or comparativa_inferida:
+            self._normalizar_valores_disponibles()
         return self

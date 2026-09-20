@@ -53,6 +53,21 @@ def caso_numerico() -> dict:
     }
 
 
+def caso_numerico_sin_respuesta() -> dict:
+    caso = caso_numerico()
+    caso.update(
+        {
+            "id": "num-ausente-001",
+            "pregunta": "¿Cuál fue el beneficio bruto?",
+            "respuesta_esperada": "El dato no está disponible en el corpus.",
+            "cifra_esperada": None,
+            "unidad": None,
+            "concept_xbrl": "GrossProfit",
+        }
+    )
+    return caso
+
+
 def caso_comparativo() -> dict:
     inicio = TEXTO_2024.index(ANCLA_2024)
     return {
@@ -117,8 +132,125 @@ class TestCasoGolden(unittest.TestCase):
         self.assertTrue(any("id repetido" in p for p in problemas))
         self.assertTrue(any("hacen falta 1 comparativas" in p for p in problemas))
 
+    def test_acepta_magnitud_y_ejercicio_ausentes(self) -> None:
+        with tempfile.TemporaryDirectory() as temporal:
+            raiz = Path(temporal)
+            corpus, _ = crear_corpus_temporal(raiz / "corpus")
+            magnitud_ausente = caso_numerico_sin_respuesta()
+            ejercicio_ausente = caso_numerico_sin_respuesta()
+            ejercicio_ausente.update(
+                {
+                    "id": "num-ejercicio-ausente-001",
+                    "fiscal_year": 2022,
+                    "concept_xbrl": "NetIncomeLoss",
+                }
+            )
+            ruta = raiz / "ausentes.jsonl"
+            escribir_jsonl(ruta, [magnitud_ausente, ejercicio_ausente])
+
+            casos = CasoGolden.cargar_jsonl(ruta, corpus, numero_esperado=2)
+
+            self.assertTrue(all(caso.espera_ausencia_numerica for caso in casos))
+
+    def test_rechaza_ausencia_incoherente_o_parcial(self) -> None:
+        import pandas as pd
+
+        parcial = caso_numerico_sin_respuesta()
+        parcial["unidad"] = "USD"
+        with self.assertRaisesRegex(ValidationError, "ambas informadas"):
+            CasoGolden.model_validate(parcial)
+
+        falso_ausente = caso_numerico_sin_respuesta()
+        falso_ausente["concept_xbrl"] = "NetIncomeLoss"
+        problemas = CasoGolden.validar_registros(
+            [falso_ausente],
+            secciones=pd.DataFrame(
+                [
+                    {
+                        "ticker": "ACME",
+                        "fiscal_year": 2024,
+                        "item": "1A",
+                        "texto": TEXTO_2024,
+                    }
+                ]
+            ),
+            xbrl=pd.DataFrame(
+                [
+                    {
+                        "ticker": "ACME",
+                        "fiscal_year": 2024,
+                        "concept": "NetIncomeLoss",
+                    }
+                ]
+            ),
+        )
+
+        self.assertTrue(any("sí reporta" in problema for problema in problemas))
+
 
 class TestEvaluadorFinanciero(unittest.TestCase):
+    def test_puntua_la_abstencion_numerica_correcta(self) -> None:
+        with tempfile.TemporaryDirectory() as temporal:
+            raiz = Path(temporal)
+            corpus, _ = crear_corpus_temporal(raiz / "corpus")
+            ruta = raiz / "ausente.jsonl"
+            escribir_jsonl(ruta, [caso_numerico_sin_respuesta()])
+            llamada = LlamadaHerramienta(
+                id="xbrl-ausente",
+                nombre="get_xbrl_fact",
+                argumentos={
+                    "ticker": "ACME",
+                    "fiscal_year": 2024,
+                    "concept": "GrossProfit",
+                },
+                duracion_ms=0,
+                resultado="ACME no reportó 'GrossProfit' en FY2024.",
+            )
+            respuesta = RespuestaAgente(
+                respuesta="El dato no está disponible en el corpus.",
+                fuente="ninguna",
+                llamadas=(llamada,),
+                latencia_ms=1,
+            )
+
+            informe = EvaluadorFinanciero(corpus).evaluar(
+                nombre_agente="agente-prudente",
+                responder=lambda _: respuesta,
+                ruta_jsonl=ruta,
+            )
+
+            resultado = informe.resultados[0]
+            self.assertTrue(resultado.cifra_correcta)
+            self.assertTrue(resultado.trayectoria_correcta)
+            self.assertTrue(resultado.acierto)
+            self.assertEqual(resultado.observaciones, ())
+
+    def test_rechaza_falsa_abstencion_o_error_tecnico(self) -> None:
+        with tempfile.TemporaryDirectory() as temporal:
+            corpus, _ = crear_corpus_temporal(Path(temporal) / "corpus")
+            evaluador = EvaluadorFinanciero(corpus)
+            caso = CasoGolden.model_validate(caso_numerico_sin_respuesta())
+            base = RespuestaAgente(
+                respuesta="El dato no está disponible.",
+                fuente="ninguna",
+                latencia_ms=1,
+            )
+            fuente_incorrecta = base.model_copy(update={"fuente": "texto"})
+            cifra_inventada = base.model_copy(
+                update={"cifra": 100.0, "unidad": "USD", "fuente": "xbrl"}
+            )
+            error_tecnico = RespuestaAgente(
+                respuesta="",
+                fuente="ninguna",
+                latencia_ms=0,
+                error="fallo de validación",
+            )
+
+            self.assertTrue(evaluador._cifra_correcta(caso, base))
+            self.assertFalse(evaluador._cifra_correcta(caso, fuente_incorrecta))
+            self.assertFalse(evaluador._cifra_correcta(caso, cifra_inventada))
+            self.assertFalse(evaluador._cifra_correcta(caso, error_tecnico))
+
     def test_rechaza_cita_textual_que_no_aparece_en_el_chunk(self) -> None:
         with tempfile.TemporaryDirectory() as temporal:
             corpus, _ = crear_corpus_temporal(Path(temporal) / "corpus")

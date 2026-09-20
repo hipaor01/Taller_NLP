@@ -15,10 +15,22 @@ from taller_nlp import (
     ConstructorAgente,
     ControlPeticionesModelo,
     CorpusVariant,
+    FabricaHerramientas,
     RegistroTelemetriaAuxiliar,
     RespuestaFinanciera,
     Retriever,
 )
+
+
+def ampliar_prompt(
+    configuracion: ConfiguracionAgente,
+    instrucciones: str,
+) -> ConfiguracionAgente:
+    """Añade instrucciones sin mutar la configuración de la variante base."""
+    if not isinstance(instrucciones, str) or not instrucciones.strip():
+        raise ValueError("instrucciones debe ser texto no vacío.")
+    prompt = f"{configuracion.system_prompt}\n\n{instrucciones.strip()}"
+    return configuracion.model_copy(update={"system_prompt": prompt})
 
 
 def ensamblar_variante_retrieval(
@@ -54,15 +66,19 @@ def extender_variante(
     base: ConstructorAgente,
     *,
     middlewares: Sequence[AgentMiddleware],
+    configuracion: ConfiguracionAgente | None = None,
     esquema_respuesta: type[RespuestaFinanciera] | None = None,
+    fabrica_herramientas: FabricaHerramientas | None = None,
 ) -> ConstructorAgente:
     """Extiende una variante sin alterar su configuración de evaluación."""
     evaluador = base.evaluador
     return ConstructorAgente(
         nombre=nombre,
-        configuracion=base.configuracion,
+        configuracion=configuracion or base.configuracion,
         corpus=base.corpus,
-        fabrica_herramientas=base.fabrica_herramientas,
+        fabrica_herramientas=(
+            fabrica_herramientas or base.fabrica_herramientas
+        ),
         middlewares=(*base.middlewares, *middlewares),
         esquema_respuesta=esquema_respuesta or base.esquema_respuesta,
         modelo=base.modelo,
@@ -74,4 +90,19 @@ def extender_variante(
         numero_esperado=evaluador.numero_esperado,
         minimo_comparativas=evaluador.minimo_comparativas,
         ruta_progreso=evaluador.ruta_progreso,
+    )
+
+
+def sustituir_retriever(
+    nombre: str,
+    base: ConstructorAgente,
+    retriever: Retriever,
+) -> ConstructorAgente:
+    """Conserva una variante y sustituye solo su recuperador textual."""
+    fabrica = FabricaHerramientas(base.corpus, retriever=retriever)
+    return extender_variante(
+        nombre,
+        base,
+        middlewares=(),
+        fabrica_herramientas=fabrica,
     )

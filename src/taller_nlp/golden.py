@@ -85,11 +85,16 @@ class CasoGolden(BaseModel):
         es_textual = self.familia in {"extractiva", "comparativa"}
 
         campos_numericos = (self.cifra_esperada, self.unidad, self.concept_xbrl)
-        if es_numerica and any(valor is None for valor in campos_numericos):
-            raise ValueError(
-                f"La familia {self.familia} requiere cifra_esperada, unidad "
-                "y concept_xbrl."
-            )
+        if es_numerica:
+            if self.concept_xbrl is None:
+                raise ValueError(
+                    f"La familia {self.familia} requiere concept_xbrl."
+                )
+            if (self.cifra_esperada is None) != (self.unidad is None):
+                raise ValueError(
+                    "cifra_esperada y unidad deben estar ambas informadas o "
+                    "ser ambas None."
+                )
         if not es_numerica and any(valor is not None for valor in campos_numericos):
             raise ValueError(
                 "Una pregunta extractiva no debe contener campos numéricos."
@@ -129,6 +134,15 @@ class CasoGolden(BaseModel):
                 )
         return self
 
+    @property
+    def espera_ausencia_numerica(self) -> bool:
+        """Indica que la respuesta correcta es que no hay cifra autorizada."""
+        return (
+            self.familia in {"numerica", "comparativa"}
+            and self.cifra_esperada is None
+            and self.unidad is None
+        )
+
     def problemas_contra_corpus(
         self, secciones: pd.DataFrame, xbrl: pd.DataFrame
     ) -> list[str]:
@@ -139,10 +153,11 @@ class CasoGolden(BaseModel):
             & (secciones.fiscal_year.astype(int) == self.fiscal_year)
         ]
         if disponibles.empty:
-            problemas.append(
-                f"{self.id}: {self.ticker} FY{self.fiscal_year} no está "
-                "en el corpus"
-            )
+            if not self.espera_ausencia_numerica:
+                problemas.append(
+                    f"{self.id}: {self.ticker} FY{self.fiscal_year} no está "
+                    "en el corpus"
+                )
             return problemas
 
         if self.familia in {"numerica", "comparativa"}:
@@ -151,9 +166,14 @@ class CasoGolden(BaseModel):
                 & (xbrl.fiscal_year.astype(int) == self.fiscal_year)
                 & (xbrl.concept == self.concept_xbrl)
             ]
-            if hechos.empty:
+            if hechos.empty and not self.espera_ausencia_numerica:
                 problemas.append(
                     f"{self.id}: {self.ticker} no reporta "
+                    f"{self.concept_xbrl!r} en FY{self.fiscal_year}"
+                )
+            elif not hechos.empty and self.espera_ausencia_numerica:
+                problemas.append(
+                    f"{self.id}: {self.ticker} sí reporta "
                     f"{self.concept_xbrl!r} en FY{self.fiscal_year}"
                 )
 

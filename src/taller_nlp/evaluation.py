@@ -34,6 +34,7 @@ from .model_resilience import (
 
 
 _METODO_SOPORTE_CITAS = "coincidencia_literal_normalizada_120"
+_METODO_AUSENCIA_NUMERICA = "fuente_ninguna_sin_cifra_ni_unidad_v1"
 
 
 class EvaluadorFinanciero:
@@ -225,7 +226,14 @@ class EvaluadorFinanciero:
         if caso.familia in {"numerica", "comparativa"}:
             cifra_correcta = self._cifra_correcta(caso, respuesta)
             if not cifra_correcta:
-                observaciones.append("La cifra o su unidad no coinciden.")
+                observaciones.append(
+                    (
+                        "La respuesta debía declarar fuente='ninguna' sin "
+                        "cifra ni unidad."
+                    )
+                    if caso.espera_ausencia_numerica
+                    else "La cifra o su unidad no coinciden."
+                )
 
         cita_existe = None
         cita_respalda = None
@@ -280,6 +288,13 @@ class EvaluadorFinanciero:
     def _cifra_correcta(
         self, caso: CasoGolden, respuesta: RespuestaAgente
     ) -> bool:
+        if caso.espera_ausencia_numerica:
+            return (
+                respuesta.error is None
+                and respuesta.fuente == "ninguna"
+                and respuesta.cifra is None
+                and respuesta.unidad is None
+            )
         if respuesta.cifra is None or caso.cifra_esperada is None:
             return False
         if not math.isfinite(respuesta.cifra):
@@ -337,6 +352,7 @@ class EvaluadorFinanciero:
             "numero_esperado": self._numero_esperado,
             "minimo_comparativas": self._minimo_comparativas,
             "metodo_soporte_citas": _METODO_SOPORTE_CITAS,
+            "metodo_ausencia_numerica": _METODO_AUSENCIA_NUMERICA,
         }
         serializado = json.dumps(
             firma, ensure_ascii=False, sort_keys=True, separators=(",", ":")
