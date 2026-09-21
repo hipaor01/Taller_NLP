@@ -1,5 +1,50 @@
 # Agente financiero · jchulvi
 
+## v2 · resultado final
+
+[agente_v2.py](agente_v2.py) define su prompt y una única función
+`crear_constructor()`: **80 líneas, sin hooks ni validadores propios**.
+Las instrucciones se han reformulado manteniendo las reglas de cifras, unidades,
+citas y comparación entre ejercicios.
+
+Se mantienen **DeepSeek V4 Flash 0731/DeepInfra**, **Voyage 4 Lite**, los **1.749
+embeddings cacheados del corpus**, Qdrant, los filtros y el contexto por sección.
+El límite nativo es de **6 llamadas** al modelo; no se cachean las consultas.
+
+[validacion_agente_v2.ipynb](validacion_agente_v2.ipynb) está ejecutado y guardado:
+**40 respuestas nuevas**, sin reutilizar respuestas de campañas anteriores.
+
+| Conjunto | Aciertos |
+| --- | ---: |
+| Oficial | **20/20** |
+| Equipo | **20/20** |
+
+Los tres fallos históricos (`of-001`, `of-004`, `of-005`) pasan en esta ejecución.
+**28/28 citas completas** verificadas, cero errores de ejecución y 7/7 celdas de
+código ejecutadas. Coste del agente: **0.0473 USD**, sin embeddings de consulta.
+**210 tests y 14 subtests** correctos. Qdrant quedó detenido y conserva sus datos.
+
+Desde la raíz del proyecto, con el entorno, Docker y la clave preparados:
+
+```bash
+python -m nbconvert --to notebook --execute --inplace \
+  --ExecutePreprocessor.timeout=3600 experimentos/jchulvi/validacion_agente_v2.ipynb
+```
+
+Campaña: `resultados/estudio_v002/v2_simple_6944a9ccd5b5f92e/`.
+Las fuentes y los datos determinan su identidad; los checkpoints permiten
+reanudar esa misma configuración. Una ejecución nueva tiene coste cloud.
+
+Los conjuntos son conocidos de desarrollo, no un hold-out. El evaluador común
+comprueba cifras/unidades, herramientas y el prefijo de la cita. El notebook
+muestra además la literalidad de la cita completa, normalizando espacios y
+mayúsculas, sin alterar respuestas ni puntuaciones.
+
+## Referencia v1 conservada
+
+El código y el notebook anteriores siguen disponibles para reproducir la referencia.
+La configuración y los resultados que siguen describen **v1**, no la nueva v2.
+
 [agente.py](agente.py) responde preguntas sobre los informes 10-K del corpus.
 Consulta herramientas, prioriza XBRL para las cifras y devuelve una
 `RespuestaFinanciera` con respuesta, procedencia y evidencia.
