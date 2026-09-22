@@ -2,6 +2,9 @@
 
 ## v3 · validación actual
 
+Es el agente predeterminado de `python -m agente` y de la interfaz que usa el
+notebook S2. `--variante` o `TALLER_VARIANTE_AGENTE` permiten elegir otra versión.
+
 [agente_v3.py](agente_v3.py) conserva los modelos, el recuperador y los límites
 de v2, sin hooks ni validadores propios. Se mantienen **DeepSeek V4 Flash
 0731/DeepInfra**, **Voyage 4 Lite**, Qdrant y los **1.749 embeddings cacheados

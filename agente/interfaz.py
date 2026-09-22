@@ -29,7 +29,7 @@ if str(_DIRECTORIO_SRC) not in sys.path:
     sys.path.insert(0, str(_DIRECTORIO_SRC))
 
 VARIABLE_VARIANTE = "TALLER_VARIANTE_AGENTE"
-MODULO_AGENTE_PREDETERMINADO = "experimentos.jchulvi.agente_v2"
+MODULO_AGENTE_PREDETERMINADO = "experimentos.jchulvi.agente_v3"
 # Alias conservado para consumidores anteriores; ya no apunta al baseline.
 MODULO_BASELINE = MODULO_AGENTE_PREDETERMINADO
 NOMBRE_FACTORIA = "crear_constructor"
