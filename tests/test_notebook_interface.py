@@ -116,7 +116,7 @@ class TestInterfazNotebook(unittest.TestCase):
         self.assertTrue(math.isnan(resumen["cita"]))
         self.assertTrue(math.isnan(resumen["coste medio (¢)"]))
 
-    def test_selecciona_jchulvi_v2_por_defecto(self) -> None:
+    def test_selecciona_jchulvi_v3_por_defecto(self) -> None:
         constructor = object()
         modulo = SimpleNamespace(crear_constructor=lambda: constructor)
         with patch.dict(os.environ, {}, clear=False):
@@ -128,7 +128,7 @@ class TestInterfazNotebook(unittest.TestCase):
         cargar.assert_called_once_with(MODULO_AGENTE_PREDETERMINADO)
         self.assertEqual(
             MODULO_AGENTE_PREDETERMINADO,
-            "experimentos.jchulvi.agente_v2",
+            "experimentos.jchulvi.agente_v3",
         )
 
     def test_selecciona_otra_variante_por_variable_de_entorno(self) -> None:

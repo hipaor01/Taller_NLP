@@ -94,14 +94,11 @@ class QdrantLocal:
                 raise RuntimeError("El contenedor ya está en uso; termina esa ejecución primero.")
             subprocess.run(["docker", "start", CONTENEDOR], check=True, capture_output=True)
         else:
-            almacen = self.directorio / "qdrant_storage"
-            almacen.mkdir(parents=True, exist_ok=True)
             subprocess.run([
                 "docker", "run", "-d", "--name", CONTENEDOR,
                 "--label", "taller.owner=jchulvi-v002", "--cpus", "2", "--memory", "2g",
                 "-e", "QDRANT__TELEMETRY_DISABLED=true",
-                "-p", "127.0.0.1:6339:6333", "--mount",
-                f"type=bind,source={almacen.resolve()},target=/qdrant/storage", IMAGEN,
+                "-p", "127.0.0.1:6339:6333", IMAGEN,
             ], check=True, capture_output=True)
         try:
             for intento in range(60):

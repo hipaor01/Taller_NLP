@@ -3,9 +3,9 @@
 ## Puesta en marcha desde un clon limpio
 
 Los pasos siguientes dejan listo el agente predeterminado,
-`experimentos.jchulvi.agente_v2`, tanto para responder una pregunta como para
+`experimentos.jchulvi.agente_v3`, tanto para responder una pregunta como para
 evaluar un conjunto JSONL. Su código está en
-[`experimentos/jchulvi/agente_v2.py`](experimentos/jchulvi/agente_v2.py).
+[`experimentos/jchulvi/agente_v3.py`](experimentos/jchulvi/agente_v3.py).
 Ejecuta todos los comandos desde la raíz del repositorio.
 
 ### 1. Requisitos
@@ -135,7 +135,7 @@ Para evaluar las 20 preguntas del conjunto propio y guardar la tabla detallada:
 ```bash
 python -m agente \
   --evaluar golden_set.jsonl \
-  --salida resultados/evaluacion_jchulvi_v2.csv
+  --salida resultados/evaluacion_jchulvi_v3.csv
 ```
 
 Para utilizar el conjunto oficial:
@@ -143,7 +143,7 @@ Para utilizar el conjunto oficial:
 ```bash
 python -m agente \
   --evaluar golden_set_oficial.jsonl \
-  --salida resultados/evaluacion_jchulvi_v2_oficial.csv
+  --salida resultados/evaluacion_jchulvi_v3_oficial.csv
 ```
 
 La evaluación hace llamadas reales al modelo, puede tardar varios minutos y
@@ -160,7 +160,7 @@ from agente import evaluar
 
 tabla = evaluar(
     "golden_set.jsonl",
-    salida="resultados/evaluacion_jchulvi_v2.csv",
+    salida="resultados/evaluacion_jchulvi_v3.csv",
 )
 print(tabla)
 ```

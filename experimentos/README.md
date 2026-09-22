@@ -39,7 +39,7 @@ def crear_constructor() -> ConstructorAgente:
     ...
 ```
 
-La interfaz usa `experimentos.jchulvi.agente_v2` por defecto. Esta variante
+La interfaz usa `experimentos.jchulvi.agente_v3` por defecto. Esta variante
 declara Qdrant como recurso de ejecución: la fachada lo inicia, valida/carga y
 detiene automáticamente alrededor de cada respuesta o evaluación. Para
 seleccionar otra variante antes de la primera llamada a `responder()`:
@@ -59,7 +59,7 @@ limpio y guardar la tabla compatible con el notebook:
 from agente import evaluar, resumir
 
 tabla = evaluar("holdout.jsonl", salida="resultados/holdout.csv")
-fila_informe = resumir(tabla, "jchulvi-v2")
+fila_informe = resumir(tabla, "jchulvi-v3")
 ```
 
 `evaluar_informe("holdout.jsonl")` conserva alternativamente el informe

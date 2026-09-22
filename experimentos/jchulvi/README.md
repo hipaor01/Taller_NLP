@@ -1,6 +1,57 @@
 # Agente financiero · jchulvi
 
-## v2 · resultado final
+## v3 · validación actual
+
+Es el agente predeterminado de `python -m agente` y de la interfaz que usa el
+notebook S2. `--variante` o `TALLER_VARIANTE_AGENTE` permiten elegir otra versión.
+
+[agente_v3.py](agente_v3.py) conserva los modelos, el recuperador y los límites
+de v2, sin hooks ni validadores propios. Se mantienen **DeepSeek V4 Flash
+0731/DeepInfra**, **Voyage 4 Lite**, Qdrant y los **1.749 embeddings cacheados
+del corpus**. El límite es de **6 llamadas al modelo**; las consultas no se cachean.
+
+La v3 se abstiene cuando falta el concepto solicitado o el ejercicio. El ajuste
+final añade ocho líneas al prompt: para preguntas generales de ingresos, ventas
+o facturación, comprueba las etiquetas `Revenues` y
+`RevenueFromContractWithCustomerExcludingAssessedTax` antes de declarar ausencia.
+Si la pregunta exige un identificador XBRL concreto, respeta ese concepto y se
+abstiene si no está disponible.
+
+[validacion_agente_v3.ipynb](validacion_agente_v3.ipynb) ejecuta los tres conjuntos
+y conserva las respuestas, las trazas, los veredictos y el diagnóstico.
+
+| Conjunto | V3 original | V3 ajustada | Coste del agente (USD) | Latencia media (s) |
+| --- | ---: | ---: | ---: | ---: |
+| Oficial | 18/20 | **20/20** | 0.01988 | 14.33 |
+| Equipo | 19/20 | **20/20** | 0.02482 | 18.21 |
+| Extra | 12/12 | **12/12** | 0.00555 | 12.28 |
+| **Total** | **49/52** | **52/52** | **0.05025** | — |
+
+Costes y latencias corresponden a la versión ajustada. Se verificaron **28/28
+citas completas**, con **cero errores de ejecución** y las seis celdas de código
+ejecutadas. Pasan los tres fallos originales: `of-008`, `of-014` y `gjhh-012`.
+El coste excluye los embeddings de consulta.
+
+Desde la raíz del proyecto, con el entorno, Docker y `OPENROUTER_API_KEY` preparados:
+
+```bash
+python -m nbconvert --to notebook --execute --inplace \
+  --ExecutePreprocessor.timeout=3600 experimentos/jchulvi/validacion_agente_v3.ipynb
+```
+
+El notebook usa una sesión de recursos para compartir Qdrant entre los tres
+conjuntos y detenerlo al terminar. La base de pruebas reside dentro del
+contenedor, sin montajes externos; los vectores cacheados permiten reconstruirla
+sin generar nuevos embeddings del corpus.
+
+Campaña final: `resultados/estudio_v002/v3_ajuste_73934c9b1f1be579/`.
+La ejecución original completa se conserva en
+`resultados/estudio_v002/v3_higinio_7a3f6e26fae6367e/`.
+Los checkpoints permiten reanudar una configuración compatible. Los resultados
+proceden de pasadas completas sobre conjuntos conocidos de desarrollo, no de
+una evaluación ciega.
+
+## v2 · referencia anterior
 
 [agente_v2.py](agente_v2.py) define su prompt y una única función
 `crear_constructor()`, sin hooks ni validadores propios.
@@ -45,7 +96,7 @@ mayúsculas, sin alterar respuestas ni puntuaciones.
 ## Referencia v1 conservada
 
 El código y el notebook anteriores siguen disponibles para reproducir la referencia.
-La configuración y los resultados que siguen describen **v1**, no la nueva v2.
+La configuración y los resultados que siguen describen **v1**, no la v3 actual.
 
 [agente.py](agente.py) responde preguntas sobre los informes 10-K del corpus.
 Consulta herramientas, prioriza XBRL para las cifras y devuelve una
@@ -92,7 +143,8 @@ Qdrant es la **base de datos vectorial**, no un modelo local. Los embeddings
 del corpus se calculan en la nube y se almacenan en disco para no volver a pagarlos.
 
 - [qdrant_local.py](qdrant_local.py) ofrece `iniciar()`, `cargar()`, `consultar()`
-  y `detener()`; el notebook usa `with qdrant.sesion():` para detenerlo al salir.
+  y `detener()`; el notebook de v3 usa `with constructor.sesion_ejecucion():`
+  para compartir el contenedor entre los tres conjuntos y detenerlo al salir.
 - Las sesiones anidadas dentro del mismo proceso comparten el contenedor; solo
   la última en cerrarse lo detiene. Un contenedor externo sigue rechazándose.
 - Docker publica Qdrant solo en `http://127.0.0.1:6339`, con 2 CPU, 2 GB de RAM
@@ -102,8 +154,10 @@ del corpus se calculan en la nube y se almacenan en disco para no volver a pagar
   `ticker`, `fiscal_year` e `item`.
 - `cargar()` comprueba el modelo, los hashes y las dimensiones. Reutiliza la
   colección existente o carga los vectores con identificadores estables.
-- Los archivos compartibles son `vectores.npy` y `manifest.json` en `embeddings/`; los datos del contenedor,
-  en `resultados/estudio_v002/qdrant_storage/`. Detenerlo no borra ninguno.
+- Los archivos compartibles son `vectores.npy` y `manifest.json` en `embeddings/`.
+  La base de pruebas se guarda dentro del contenedor, sin carpeta externa ni
+  volumen configurado. Detenerlo conserva los datos; eliminarlo descarta la base,
+  que puede reconstruirse con los vectores cacheados.
 
 ## Entorno
 

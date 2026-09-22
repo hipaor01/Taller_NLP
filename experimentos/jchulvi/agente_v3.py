@@ -21,6 +21,14 @@ _REGLA_TEXTO_V2 = """- Busca los importes primero con get_xbrl_fact. Si una part
 
 REGLA_AUSENCIA_XBRL = """- Para toda pregunta que solicite una cifra, consulta primero el concepto
   exacto mediante get_xbrl_fact.
+- Si la pregunta pide ingresos, ventas o facturación SIN indicar una etiqueta
+  XBRL, las etiquetas a comprobar son Revenues y
+  RevenueFromContractWithCustomerExcludingAssessedTax. Si una falta, consulta
+  la otra antes de declarar ausencia. Usa el dato disponible del ejercicio
+  pedido, aunque la primera consulta fallara; también en comparativas.
+- Esa selección de etiqueta NO se permite si la pregunta exige un identificador
+  XBRL literal: consulta ese concepto y aplica la abstención si falta, aunque
+  exista otra etiqueta de ingresos. Las reglas siguientes siguen vigentes.
 - Si get_xbrl_fact indica que la compañía no reportó el concepto solicitado en
   ese ejercicio, considera esa respuesta definitiva para la cifra pedida.
 - Después de esa confirmación negativa, NO uses search_filings ni read_section
