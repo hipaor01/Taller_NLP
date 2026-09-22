@@ -86,7 +86,7 @@ class VerificadorCitas(AgentMiddleware):
         fragmento = self._chunks.get(chunk_actual)
         if fragmento is None:
             return None
-        linea = self._seleccionar_linea_literal(cita, fragmento.texto)
+        linea = self.seleccionar_linea_literal(cita, fragmento.texto)
         if linea is None:
             return None
         return {
@@ -107,7 +107,7 @@ class VerificadorCitas(AgentMiddleware):
         )
 
     @classmethod
-    def _seleccionar_linea_literal(
+    def seleccionar_linea_literal(
         cls,
         cita: str,
         texto: str,
@@ -116,7 +116,7 @@ class VerificadorCitas(AgentMiddleware):
         lineas = tuple(linea.strip() for linea in texto.splitlines() if linea.strip())
         candidatas = []
         for posicion, linea in enumerate(lineas):
-            puntuacion = cls._puntuar_linea(cita, linea)
+            puntuacion = cls.puntuar_linea(cita, linea)
             if puntuacion is not None:
                 candidatas.append((puntuacion, -posicion, linea))
         if not candidatas:
@@ -128,7 +128,7 @@ class VerificadorCitas(AgentMiddleware):
         return mejor[2]
 
     @staticmethod
-    def _puntuar_linea(
+    def puntuar_linea(
         cita: str,
         linea: str,
     ) -> tuple[int, int, float, float] | None:
@@ -157,6 +157,15 @@ class VerificadorCitas(AgentMiddleware):
         if not (tiene_evidencia_numerica or tiene_evidencia_lexica):
             return None
         return numeros_comunes, palabras_comunes, cobertura, similitud
+
+    @classmethod
+    def _seleccionar_linea_literal(
+        cls,
+        cita: str,
+        texto: str,
+    ) -> str | None:
+        """Alias compatible para las pruebas y variantes anteriores."""
+        return cls.seleccionar_linea_literal(cita, texto)
 
     @staticmethod
     def _extraer_numeros(texto: str) -> set[str]:

@@ -482,6 +482,78 @@ python -m agente \
   --salida resultados/resumen_agente_v016.csv
 ```
 
+## `agente_v017`: v015 + abstención XBRL terminal
+
+Esta variante conserva el modelo, el contrato, los middlewares y el recuperador
+híbrido de v015. Añade únicamente una regla prioritaria al prompt: cuando
+`get_xbrl_fact` confirma que el concepto solicitado no está reportado, esa
+ausencia es definitiva. El agente no debe buscar la cifra en el texto,
+sustituir el concepto, calcularla mediante identidades contables ni mencionar
+cifras alternativas. La salida debe usar `fuente="ninguna"`, `cifra=null` y
+`unidad=null`.
+
+Para evaluar específicamente las abstenciones desde cero:
+
+```bash
+python -m agente \
+  --variante experimentos.higinio.agente_v017 \
+  --evaluar golden_set_extra.jsonl \
+  --salida resultados/agente_v017_extra.csv \
+  --reiniciar-progreso
+```
+
+Para generar su resumen local:
+
+```bash
+python -m agente \
+  --resumir resultados/agente_v017_extra.csv \
+  --etiqueta agente_v017 \
+  --salida resultados/resumen_agente_v017_extra.csv
+```
+
+## `agente_v018`: v017 + parada tras una cifra XBRL válida
+
+Esta variante conserva íntegramente v017 y añade una regla para preguntas
+numéricas simples: cuando `get_xbrl_fact` devuelve la magnitud solicitada, el
+agente responde inmediatamente con `fuente="xbrl"`. No realiza búsquedas
+textuales posteriores ni repite herramientas. La regla excluye expresamente
+las comparativas y las preguntas que pidan causas o explicaciones.
+
+Para evaluarla desde cero:
+
+```bash
+python -m agente \
+  --variante experimentos.higinio.agente_v018 \
+  --evaluar golden_set.jsonl \
+  --salida resultados/agente_v018.csv \
+  --reiniciar-progreso
+```
+
+La política de abstención heredada de v017 se puede comprobar por separado
+con `golden_set_extra.jsonl` y una salida terminada en `_extra.csv`.
+
+## `agente_v019`: v018 + fallback conservador de salida estructurada
+
+Esta variante conserva íntegramente v018 y añade un middleware que actúa solo
+cuando el modelo termina con texto final pero sin una respuesta estructurada.
+No realiza otra llamada al modelo ni consulta el golden set. Reconstruye la
+salida únicamente si una línea literal inequívoca de los chunks recuperados
+respalda el texto, o si el modelo emitió como texto un JSON válido cuya cita ya
+es verificable. También inspecciona los argumentos de una llamada estructurada
+mal clasificada por el proveedor, pero aplica las mismas validaciones. Las
+trazas con `get_xbrl_fact`, las respuestas vacías sin un JSON recuperable y los
+casos ambiguos se dejan intactos para que fallen de la forma habitual.
+
+Para evaluarla contra el conjunto oficial:
+
+```bash
+python -m agente \
+  --variante experimentos.higinio.agente_v019 \
+  --evaluar golden_set_oficial.jsonl \
+  --salida resultados/agente_v019_oficial.csv \
+  --reiniciar-progreso
+```
+
 ## Progreso reanudable y análisis detallado
 
 Todas las evaluaciones lanzadas con `python -m agente --evaluar` guardan ahora
