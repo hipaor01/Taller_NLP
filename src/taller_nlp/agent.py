@@ -1,9 +1,10 @@
 """Fachada pública común para todas las variantes del agente."""
 
 from collections.abc import Callable
+from contextlib import AbstractContextManager, nullcontext
 from pathlib import Path
 from time import perf_counter
-from typing import Protocol, final
+from typing import Any, Protocol, final
 
 from .contracts import InformeEvaluacion, RespuestaAgente
 from .model_resilience import formatear_excepcion_modelo
@@ -35,13 +36,16 @@ class EvaluadorAgente(Protocol):
 class AgenteFinanciero:
     """Fachada estable con motor y evaluador inyectables."""
 
-    __slots__ = ("_nombre", "_motor", "_evaluador")
+    __slots__ = ("_nombre", "_motor", "_evaluador", "_sesion_ejecucion")
 
     def __init__(
         self,
         nombre: str,
         motor: MotorAgente,
         evaluador: EvaluadorAgente,
+        sesion_ejecucion: (
+            Callable[[], AbstractContextManager[Any]] | None
+        ) = None,
     ) -> None:
         nombre_normalizado = nombre.strip()
         if not nombre_normalizado:
@@ -49,6 +53,7 @@ class AgenteFinanciero:
         self._nombre = nombre_normalizado
         self._motor = motor
         self._evaluador = evaluador
+        self._sesion_ejecucion = sesion_ejecucion or nullcontext
 
     @property
     def nombre(self) -> str:
@@ -62,7 +67,8 @@ class AgenteFinanciero:
 
         inicio = perf_counter()
         try:
-            respuesta = self._motor.responder(pregunta_normalizada)
+            with self._sesion_ejecucion():
+                respuesta = self._motor.responder(pregunta_normalizada)
         except Exception as exc:
             latencia_ms = (perf_counter() - inicio) * 1_000
             return RespuestaAgente(
@@ -86,11 +92,12 @@ class AgenteFinanciero:
         if not ruta.is_file():
             raise FileNotFoundError(f"No existe el golden set: {ruta}")
 
-        informe = self._evaluador.evaluar(
-            nombre_agente=self.nombre,
-            responder=self.responder,
-            ruta_jsonl=ruta,
-        )
+        with self._sesion_ejecucion():
+            informe = self._evaluador.evaluar(
+                nombre_agente=self.nombre,
+                responder=self.responder,
+                ruta_jsonl=ruta,
+            )
         if not isinstance(informe, InformeEvaluacion):
             raise TypeError(
                 "EvaluadorAgente.evaluar() debe devolver un InformeEvaluacion."

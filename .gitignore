@@ -55,7 +55,7 @@ experimentos/**/artefactos/
 golden_set_extra.jsonl
 
 # Resultados de las pruebas locales contra el golden set adicional y el oficial
-resultados/**/*_extra.csv
+#resultados/**/*_extra.csv
 
 # Solo se comparte el índice del corpus; no lotes parciales ni consultas antiguas.
 experimentos/jchulvi/embeddings/**/lote_*.npy

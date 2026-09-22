@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import sys
 from collections.abc import Sequence
@@ -11,9 +12,10 @@ from pathlib import Path
 import pandas as pd
 
 from .interfaz import (
-    MODULO_BASELINE,
+    MODULO_AGENTE_PREDETERMINADO,
     VARIABLE_VARIANTE,
     evaluar,
+    responder,
     resumir,
     tabla_desde_manifiesto,
 )
@@ -39,11 +41,17 @@ def _crear_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="python -m agente",
         description=(
-            "Evalúa una variante, resume un CSV o exporta un manifiesto "
-            "existente sin volver a ejecutar el agente."
+            "Responde una pregunta, evalúa una variante, resume un CSV o "
+            "exporta un manifiesto existente."
         ),
     )
     operacion = parser.add_mutually_exclusive_group(required=True)
+    operacion.add_argument(
+        "--responder",
+        type=_texto_no_vacio,
+        metavar="PREGUNTA",
+        help="Responde una pregunta con el agente seleccionado.",
+    )
     operacion.add_argument(
         "--evaluar",
         type=Path,
@@ -85,7 +93,8 @@ def _crear_parser() -> argparse.ArgumentParser:
         metavar="MODULO",
         help=(
             "Módulo que expone crear_constructor(); si se omite se usa "
-            f"{VARIABLE_VARIANTE} o el baseline."
+            f"{VARIABLE_VARIANTE} o el agente predeterminado. Solo se aplica "
+            "a --responder y --evaluar."
         ),
     )
     parser.add_argument(
@@ -128,6 +137,14 @@ def _ruta_progreso_automatica(
     )
 
 
+def _valor_json(valor: object) -> object:
+    """Convierte contratos Pydantic y objetos de traza para la salida CLI."""
+    model_dump = getattr(valor, "model_dump", None)
+    if callable(model_dump):
+        return model_dump(mode="json")
+    return str(valor)
+
+
 def main(argumentos: Sequence[str] | None = None) -> int:
     parser = _crear_parser()
     opciones = parser.parse_args(argumentos)
@@ -142,7 +159,9 @@ def main(argumentos: Sequence[str] | None = None) -> int:
 
     if opciones.desde_manifiesto is not None:
         if opciones.variante is not None:
-            parser.error("--variante solo se puede usar con --evaluar")
+            parser.error(
+                "--variante solo se puede usar con --responder o --evaluar"
+            )
         if opciones.salida is None or opciones.resumen is None:
             parser.error(
                 "--desde-manifiesto requiere --salida y --resumen"
@@ -180,9 +199,29 @@ def main(argumentos: Sequence[str] | None = None) -> int:
     if opciones.resumen is not None:
         parser.error("--resumen solo se puede usar con --desde-manifiesto")
 
+    if opciones.responder is not None:
+        if opciones.salida is not None:
+            parser.error("--salida no se puede usar con --responder")
+        if opciones.etiqueta is not None:
+            parser.error("--etiqueta no se puede usar con --responder")
+        if opciones.variante is not None:
+            os.environ[VARIABLE_VARIANTE] = opciones.variante
+        resultado = responder(opciones.responder)
+        print(
+            json.dumps(
+                resultado,
+                ensure_ascii=False,
+                indent=2,
+                default=_valor_json,
+            )
+        )
+        return 0
+
     if opciones.resumir is not None:
         if opciones.variante is not None:
-            parser.error("--variante solo se puede usar con --evaluar")
+            parser.error(
+                "--variante solo se puede usar con --responder o --evaluar"
+            )
         ruta = opciones.resumir
         if not ruta.is_file():
             parser.error(f"no existe la tabla de evaluación: {ruta}")
@@ -196,7 +235,10 @@ def main(argumentos: Sequence[str] | None = None) -> int:
             )
         if opciones.variante is not None:
             os.environ[VARIABLE_VARIANTE] = opciones.variante
-        modulo_variante = os.getenv(VARIABLE_VARIANTE, MODULO_BASELINE).strip()
+        modulo_variante = os.getenv(
+            VARIABLE_VARIANTE,
+            MODULO_AGENTE_PREDETERMINADO,
+        ).strip()
         ruta_progreso = opciones.progreso or _ruta_progreso_automatica(
             opciones.evaluar,
             modulo_variante=modulo_variante,

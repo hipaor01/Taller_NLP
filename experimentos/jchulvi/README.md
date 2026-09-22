@@ -3,13 +3,15 @@
 ## v2 · resultado final
 
 [agente_v2.py](agente_v2.py) define su prompt y una única función
-`crear_constructor()`: **80 líneas, sin hooks ni validadores propios**.
+`crear_constructor()`, sin hooks ni validadores propios.
 Las instrucciones se han reformulado manteniendo las reglas de cifras, unidades,
 citas y comparación entre ejercicios.
 
 Se mantienen **DeepSeek V4 Flash 0731/DeepInfra**, **Voyage 4 Lite**, los **1.749
 embeddings cacheados del corpus**, Qdrant, los filtros y el contexto por sección.
 El límite nativo es de **6 llamadas** al modelo; no se cachean las consultas.
+Cuando se usa mediante la fachada `agente/`, Qdrant se declara como recurso del
+`ConstructorAgente` y su sesión se gestiona automáticamente durante la operación.
 
 [validacion_agente_v2.ipynb](validacion_agente_v2.ipynb) está ejecutado y guardado:
 **40 respuestas nuevas**, sin reutilizar respuestas de campañas anteriores.
@@ -91,6 +93,8 @@ del corpus se calculan en la nube y se almacenan en disco para no volver a pagar
 
 - [qdrant_local.py](qdrant_local.py) ofrece `iniciar()`, `cargar()`, `consultar()`
   y `detener()`; el notebook usa `with qdrant.sesion():` para detenerlo al salir.
+- Las sesiones anidadas dentro del mismo proceso comparten el contenedor; solo
+  la última en cerrarse lo detiene. Un contenedor externo sigue rechazándose.
 - Docker publica Qdrant solo en `http://127.0.0.1:6339`, con 2 CPU, 2 GB de RAM
   e imagen fijada por digest en el helper.
 - El índice contiene **1.749 vectores de 1.024 dimensiones**, uno por fragmento.

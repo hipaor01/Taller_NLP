@@ -10,6 +10,7 @@ import urllib.request
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
+from threading import RLock
 
 import numpy as np
 import pandas as pd
@@ -17,6 +18,8 @@ import pandas as pd
 URL = "http://127.0.0.1:6339"
 CONTENEDOR = "taller-nlp-jchulvi-v002"
 IMAGEN = "qdrant/qdrant@sha256:12364fe851b9f17356fc88189fc06d1b521262e04659ec7345975b00c9246a10"
+_SESIONES_LOCK = RLock()
+_SESIONES_ACTIVAS = 0
 
 
 def validar_vectores(vectores, filas, dimension=None):
@@ -166,11 +169,18 @@ class QdrantLocal:
 
     @contextmanager
     def sesion(self, *, cargar_indice=True):
-        """Forma recomendada para el notebook: garantiza stop mediante finally."""
-        self.iniciar()
+        """Comparte sesiones anidadas y garantiza la parada de la última."""
+        global _SESIONES_ACTIVAS
+        with _SESIONES_LOCK:
+            if _SESIONES_ACTIVAS == 0:
+                self.iniciar()
+            _SESIONES_ACTIVAS += 1
         try:
             if cargar_indice:
                 self.cargar()
             yield self
         finally:
-            self.detener()
+            with _SESIONES_LOCK:
+                _SESIONES_ACTIVAS -= 1
+                if _SESIONES_ACTIVAS == 0:
+                    self.detener()

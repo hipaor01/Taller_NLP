@@ -1,164 +1,195 @@
 # Agente financiero sobre informes SEC 10-K
 
-Proyecto del Taller de NLP dedicado a construir y evaluar un agente que responde
-preguntas sobre informes anuales de empresas, combinando consultas financieras
-exactas con búsqueda de evidencia textual.
+## Puesta en marcha desde un clon limpio
 
-El agente utiliza herramientas para consultar datos XBRL, localizar fragmentos
-de los informes y generar respuestas estructuradas con fuentes verificables.
-Su evaluación considera tanto la respuesta como el procedimiento utilizado
-para obtenerla.
+Los pasos siguientes dejan listo el agente predeterminado,
+`experimentos.jchulvi.agente_v2`, tanto para responder una pregunta como para
+evaluar un conjunto JSONL. Su código está en
+[`experimentos/jchulvi/agente_v2.py`](experimentos/jchulvi/agente_v2.py).
+Ejecuta todos los comandos desde la raíz del repositorio.
 
-## Objetivos
+### 1. Requisitos
 
-- Responder preguntas numéricas, extractivas y comparativas sobre informes 10-K.
-- Seleccionar la herramienta adecuada para cada consulta y reconocer cuándo falta información.
-- Acompañar las respuestas de cifras, unidades y citas que permitan verificar su procedencia.
-- Medir el efecto de los filtros, la búsqueda híbrida y la reescritura de consultas sobre la recuperación.
-- Comparar las versiones del agente en calidad, coste y latencia mediante evaluaciones reproducibles.
+- **Git**.
+- **Python 3.10 o posterior**, con soporte para crear entornos `venv`.
+- **Docker** con el daemon en ejecución. Puede instalarse Docker Desktop en
+  macOS, Windows o Linux, o Docker Engine en Linux, siguiendo la
+  [documentación oficial](https://docs.docker.com/get-started/).
+- Una cuenta de **OpenRouter**, una
+  [API key](https://openrouter.ai/settings/keys) y saldo o acceso suficiente
+  para los modelos utilizados. Las llamadas al agente tienen coste.
+- Acceso a Internet para OpenRouter y, durante el primer arranque, para que
+  Docker descargue la imagen fijada de Qdrant si no está instalada.
 
-## Datos
+El repositorio ya incluye el corpus, los hechos XBRL y los embeddings del
+corpus. No es necesario descargar informes ni recalcular el índice para usar el
+agente predeterminado. Docker debe permitir al contenedor utilizar 2 CPU y 2 GB
+de memoria.
 
-El corpus incluye **seis empresas** —NVIDIA, Microsoft, Apple, Alphabet, Meta y
-Amazon— y los ejercicios fiscales **2024 y 2025**. Contiene **48 secciones**,
-**1.749 fragmentos de texto** y **135 hechos XBRL**, con información sobre
-riesgos, comentarios de la dirección y estados financieros.
+Comprueba los requisitos antes de continuar:
 
-El conjunto propio reúne **20 preguntas**, incluidas **8 comparativas**.
-Se dispone además de un conjunto oficial de 20 preguntas para validar las
-soluciones.
-
-## Estructura del repositorio
-
-```text
-├── agente/                 # Interfaz pública: responder() y evaluar()
-├── src/taller_nlp/         # Motor, herramientas, recuperación y evaluadores
-├── corpus/                 # Informes, fragmentos, hechos XBRL e índice
-├── experimentos/           # Baseline y variantes del equipo
-├── resultados/             # Evaluaciones y tablas comparativas
-├── tests/                  # Pruebas del proyecto
-├── golden_set*.jsonl       # Conjuntos de preguntas de evaluación
-├── S1_*.ipynb              # Herramientas y bucle del agente
-├── S2_*.ipynb              # Robustez y evaluación
-└── pyproject.toml          # Dependencias y configuración
+```bash
+git --version
+python3 --version
+docker version
 ```
 
-## Resultados destacados
+`docker version` debe mostrar tanto el cliente como el servidor. Si solo muestra
+el cliente o devuelve un error de conexión, inicia Docker Desktop o el servicio
+de Docker.
 
-Los tres integrantes han registrado ejecuciones de **20/20 en el conjunto
-propio**, frente al **11/20 del baseline**. Se muestran las mejores variantes
-medidas de cada integrante, incluyendo los empates de Higinio y Hugo, y la
-validación final de jchulvi. Las tablas distinguen el conjunto propio, el oficial
-y los casos de estrés.
+### 2. Clonar el repositorio
 
-### Calidad en el conjunto propio
+```bash
+git clone https://github.com/hipaor01/Taller_NLP.git
+cd Taller_NLP
+```
 
-20 preguntas: **6 extractivas, 6 numéricas y 8 comparativas**.
+### 3. Crear e instalar el entorno virtual
 
-| Agente | Extractivas | Numéricas | Comparativas | Total | Cita | Cifra | Trayectoria | Recall@5 |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| Baseline | 5/6 | 6/6 | 0/8 | 11/20 | 42,9 % | 85,7 % | 75,0 % | 42,9 % |
-| Higinio v014 | 6/6 | 6/6 | 8/8 | **20/20** | 100,0 % | 100,0 % | 100,0 % | 78,6 % |
-| Higinio v015 | 6/6 | 6/6 | 8/8 | **20/20** | 100,0 % | 100,0 % | 100,0 % | 92,9 % |
-| Hugo v003 | 6/6 | 6/6 | 8/8 | **20/20** | 100,0 % | 100,0 % | — | 64,3 % |
-| Hugo v004 | 6/6 | 6/6 | 8/8 | **20/20** | 100,0 % | 100,0 % | — | 57,1 % |
-| Hugo v005 | 6/6 | 6/6 | 8/8 | **20/20** | 100,0 % | 100,0 % | — | 57,1 % |
-| jchulvi v2 | 6/6 | 6/6 | 8/8 | **20/20** | 100,0 % | 100,0 % | 100,0 % | 92,9 % |
+En macOS o Linux:
 
-Cita y cifra se calculan sobre las preguntas donde aplica cada comprobación;
-trayectoria, sobre las 20 preguntas. Recall@5 mide la recuperación del ancla
-textual en las 14 preguntas que la tienen. Una respuesta puede citar otro
-pasaje válido y acertar sin recuperar esa ancla. `—` indica una métrica que la
-fuente consultada no desglosa; no equivale a cero.
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -e .
+```
 
-### Coste y rendimiento en el conjunto propio
+En Windows PowerShell:
 
-| Agente | Coste medio (USD) | Coste de 20 preguntas (USD) | Latencia media (s) | Herramientas por pregunta | Errores de ejecución |
-| --- | ---: | ---: | ---: | ---: | ---: |
-| Baseline | 0,007592 | 0,15184 | 14,87 | 3,10 | 2 |
-| Higinio v014 | 0,008494 | 0,16987 | 19,91 | 3,15 | 0 |
-| Higinio v015 | 0,008208 | 0,16415 | 16,15 | 2,85 | 0 |
-| Hugo v003 | ≈ 0,0339 | ≈ 0,678 | 12,7 | 2,70 | — |
-| Hugo v004 | ≈ 0,0347 | ≈ 0,694 | 12,3 | 2,75 | — |
-| Hugo v005 | ≈ 0,0342 | ≈ 0,684 | 12,0 | 2,75 | — |
-| jchulvi v2 | 0,001316 | 0,02632 | 19,63 | 2,95 | 0 |
+```powershell
+py -3 -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+python -m pip install -e .
+```
 
-Los importes están expresados en **USD**, convertidos desde céntimos cuando la
-fuente los publica así. El coste total es la media por 20 preguntas. `≈` señala
-valores publicados con redondeo y totales derivados de ellos. Las llamadas
-corresponden a **herramientas**, no a turnos del modelo.
+La instalación editable obtiene las dependencias directamente de
+[`pyproject.toml`](pyproject.toml). Para instalar también las dependencias de
+pruebas y notebooks:
 
-### Validación en el conjunto oficial
+```bash
+python -m pip install -e ".[test,notebook]"
+```
 
-20 preguntas: **6 extractivas, 7 numéricas y 7 comparativas**.
+### 4. Configurar OpenRouter
 
-| Agente | Extractivas | Numéricas | Comparativas | Total | Recall@5 | Coste medio (USD) | Latencia media (s) | Herramientas por pregunta |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| Hugo v002 | 6/6 | 7/7 | 7/7 | **20/20** | 92,3 % | ≈ 0,0321 | 12,8 | 2,70 |
-| Hugo v005 | 6/6 | 7/7 | 7/7 | **20/20** | 84,6 % | ≈ 0,0388 | 13,5 | 2,80 |
-| jchulvi v2 | 6/6 | 7/7 | 7/7 | **20/20** | 100,0 % | 0,001051 | 23,85 | 2,80 |
+Crea una API key de uso normal en la
+[página de claves de OpenRouter](https://openrouter.ai/settings/keys) y expórtala
+en la terminal desde la que se ejecutará el agente.
 
-Las tres ejecuciones registran **100 % en cita y cifra**. El recall se mide sobre
-13 preguntas con ancla. No se ha localizado una evaluación oficial de Higinio
-en los archivos revisados. Hugo v002 se incluye por su 20/20 oficial, aunque
-obtiene 14/20 en el propio. jchulvi v2 suma **40/40**, **28/28 citas completas
-verificadas**, cero errores y **0,04733 USD** de coste del agente entre ambos
-conjuntos.
+En macOS o Linux:
 
-### Configuración de las variantes
+```bash
+export OPENROUTER_API_KEY="sk-or-v1-..."
+```
 
-| Integrante | Variantes destacadas | Modelo | Recuperación | Controles propios |
-| --- | --- | --- | --- | --- |
-| Higinio | [v014](experimentos/higinio/agente_v014.py), [v015](experimentos/higinio/agente_v015.py) | Gemini 3.8 Flash, configuración heredada del baseline | BGE-small; híbrida BM25 + densa, RRF y filtros de metadatos | Verificación XBRL, guardrail comparativo, reparación de citas y contrato comparativo tolerante |
-| Hugo | [v003](experimentos/hugo/agente_v003.py), [v004](experimentos/hugo/agente_v004.py), [v005](experimentos/hugo/agente_v005.py) | Claude Sonnet 5, API de Anthropic | BGE-small; densa con filtros de metadatos | v003: instrucciones comparativas; v004: añade comprobador XBRL; v005: añade reparador de citas |
-| jchulvi | [v2](experimentos/jchulvi/agente_v2.py) | DeepSeek V4 Flash 0731, OpenRouter/DeepInfra | Voyage 4 Lite, 1.024 dimensiones; Qdrant, filtros y contexto de sección | Salida estructurada e instrucciones; sin middlewares propios; caché de vectores del corpus |
+En Windows PowerShell:
 
-La configuración de Higinio se obtiene del código y puede cambiarse por entorno;
-los CSV no conservan el identificador del modelo de cada ejecución. Los modelos
-de Hugo constan en sus tablas publicadas y el de jchulvi en el manifiesto de la
-campaña. Higinio v015 mejora el recall, coste y latencia observados de v014
-manteniendo el 20/20. Hugo v003, v004 y v005 empatan en el propio: la prueba de
-estrés permite distinguir su comportamiento fuera de esas preguntas.
+```powershell
+$env:OPENROUTER_API_KEY="sk-or-v1-..."
+```
 
-### Casos de estrés documentados
+La variable solo dura lo que dure esa sesión de terminal. El proyecto ignora
+los ficheros `.env`, pero **no los carga automáticamente**: guardar ahí la clave
+no sustituye al `export`. No escribas la clave en el código, el README ni un
+archivo que pueda terminar en Git.
 
-Ocho preguntas adicionales de Hugo: tres de beneficio por acción, tres sin
-respuesta en el corpus y dos extractivas con apóstrofos tipográficos.
+El agente predeterminado usa a través de OpenRouter el modelo
+`deepseek/deepseek-v4-flash-0731`, con el proveedor DeepInfra, y genera los
+embeddings de cada consulta con `voyageai/voyage-4-lite`. Los embeddings del
+corpus ya están versionados, pero cada búsqueda textual nueva necesita acceso a
+la API.
 
-| Agente | Beneficio por acción | Datos ausentes | Citas tipográficas | Total | Coste total (USD) |
-| --- | ---: | ---: | ---: | ---: | ---: |
-| Hugo v003 | 0/3 | 3/3 | 2/2 | 5/8 | ≈ 0,19 |
-| Hugo v005 | **3/3** | 3/3 | 2/2 | **8/8** | ≈ 0,28 |
+### 5. Responder una pregunta
 
-El comprobador XBRL corrigió tres cifras redondeadas. No consta esta misma
-prueba para Higinio ni jchulvi; estos ocho casos no se suman a las notas de los
-conjuntos de 20 preguntas.
+La opción `--responder` imprime como JSON la respuesta estructurada junto con su
+traza y telemetría. Este comando realiza llamadas reales a OpenRouter:
 
-### Fuentes y lectura de los resultados
+```bash
+python -m agente \
+  --responder "¿Cuál fue el beneficio neto de Apple en FY2025?"
+```
 
-- **Baseline y Higinio:** [CSV del baseline](resultados/baseline.csv),
-  [v014](resultados/agente_v014.csv), [v015](resultados/agente_v015.csv) y
-  [resúmenes](resultados/). Aciertos recalculados exigiendo todas las
-  comprobaciones aplicables y ausencia de error.
-- **Hugo:** [tablas de evaluación y estrés](experimentos/hugo/README.md).
-  Los CSV de esas ejecuciones no están disponibles en este checkout; se conserva
-  la precisión publicada. Su README recoge otra pasada del baseline, por lo que
-  aquí se utiliza únicamente el baseline del CSV enlazado.
-- **jchulvi:** [notebook de validación ejecutado](experimentos/jchulvi/validacion_agente_v2.ipynb),
-  campaña `v2_simple_6944a9ccd5b5f92e`. Métricas contrastadas con sus manifiestos.
+La misma interfaz puede utilizarse desde Python:
 
-Son ejecuciones con distintos modelos y configuraciones, no una comparación
-controlada del efecto de un único cambio. El baseline utiliza tarifas docentes,
-Hugo estima el coste por tokens y jchulvi registra el coste del proveedor,
-**sin incluir embeddings de consulta**. Las latencias dependen de las condiciones
-de cada ejecución; no se dispone de repeticiones suficientes para estimar su
-variabilidad.
+```python
+from agente import responder
 
-El evaluador de citas comprueba coincidencia literal, no el respaldo semántico
-completo de la respuesta. Los conjuntos propio y oficial son conocidos durante
-el desarrollo: **20/20 no garantiza el mismo resultado en preguntas nuevas**.
-La evaluación ciega de la práctica queda pendiente.
+resultado = responder("¿Cuál fue el beneficio neto de Apple en FY2025?")
+respuesta = resultado["structured_response"]
+print(respuesta.respuesta)
+print(respuesta.cifra, respuesta.unidad)
+```
 
-Los [notebooks](S2_Robustez_y_Evaluacion_Alumno.ipynb) y la documentación de
-[experimentos](experimentos/README.md) recogen el procedimiento de evaluación
-y el detalle de las variantes.
+El primer arranque puede tardar más porque Docker debe descargar Qdrant, crear
+el contenedor `taller-nlp-jchulvi-v002` y cargar el índice. La aplicación expone
+Qdrant solo en `127.0.0.1:6339` y detiene el contenedor al terminar la operación;
+los datos cargados quedan conservados para ejecuciones posteriores.
+
+### 6. Evaluar el agente predeterminado
+
+Para evaluar las 20 preguntas del conjunto propio y guardar la tabla detallada:
+
+```bash
+python -m agente \
+  --evaluar golden_set.jsonl \
+  --salida resultados/evaluacion_jchulvi_v2.csv
+```
+
+Para utilizar el conjunto oficial:
+
+```bash
+python -m agente \
+  --evaluar golden_set_oficial.jsonl \
+  --salida resultados/evaluacion_jchulvi_v2_oficial.csv
+```
+
+La evaluación hace llamadas reales al modelo, puede tardar varios minutos y
+consume saldo. El comando muestra la tabla, guarda el CSV indicado y crea un
+progreso reanudable en `experimentos/resultados/progreso/`. Si la ejecución se
+interrumpe, repite el mismo comando para continuar sin pagar de nuevo los casos
+terminados. Usa `--reiniciar-progreso` solo cuando quieras descartar ese progreso
+y repetir toda la evaluación.
+
+También puede evaluarse desde Python:
+
+```python
+from agente import evaluar
+
+tabla = evaluar(
+    "golden_set.jsonl",
+    salida="resultados/evaluacion_jchulvi_v2.csv",
+)
+print(tabla)
+```
+
+### 7. Docker y solución de problemas
+
+No hay que ejecutar `docker run` manualmente: el agente crea, valida, carga y
+detiene su propio contenedor. Si el proceso se cerró de manera forzada y una
+ejecución posterior informa de que el contenedor sigue en uso, detenlo sin
+borrar sus datos y vuelve a ejecutar el agente:
+
+```bash
+docker stop taller-nlp-jchulvi-v002
+```
+
+- **`docker: command not found`**: instala Docker y abre una terminal nueva.
+- **Cannot connect to the Docker daemon**: inicia Docker Desktop o el servicio
+  de Docker y comprueba de nuevo `docker version`.
+- **Error 401/403 de OpenRouter**: verifica que `OPENROUTER_API_KEY` esté
+  exportada en la terminal actual y que la clave sea válida.
+- **Error 402/429 de OpenRouter**: revisa el saldo, los límites de la clave y
+  los límites de peticiones. El progreso parcial de una evaluación queda
+  guardado.
+- **El puerto 6339 está ocupado**: detén el proceso o contenedor que lo utiliza
+  antes de volver a ejecutar el agente.
+
+Para verificar la instalación sin realizar llamadas al modelo, instala el extra
+de pruebas y ejecuta:
+
+```bash
+python -m pytest
+```

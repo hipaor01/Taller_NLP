@@ -1,0 +1,19 @@
+id,familia,ticker,latencia_s,coste_usd,llamadas,cita,cifra,trayectoria,recall,error
+extra-001,numerica,AMZN,0.0,0.0,0,,False,False,,"ValidationError: 1 validation error for RespuestaAgente
+  Value error, No puede indicarse una unidad sin una cifra. [type=value_error, input_value={'respuesta': 'Amazon no ...0, 'tokens_salida': 911}, input_type=dict]
+    For further information visit https://errors.pydantic.dev/2.12/v/value_error"
+extra-002,numerica,AMZN,35.128014624999196,0.01659225,6,,False,True,,
+extra-003,numerica,AMZN,39.6208305830005,0.023386499999999998,4,,True,True,,
+extra-004,numerica,GOOGL,0.0,0.0,0,,False,False,,"ValidationError: 1 validation error for RespuestaAgente
+  Value error, No puede indicarse una unidad sin una cifra. [type=value_error, input_value={'respuesta': 'Alphabet n...3, 'tokens_salida': 402}, input_type=dict]
+    For further information visit https://errors.pydantic.dev/2.12/v/value_error"
+extra-005,numerica,META,18.785612584000773,0.00905025,2,,True,True,,
+extra-006,numerica,NVDA,15.077895708000142,0.00723825,3,,True,True,,
+extra-007,numerica,MSFT,9.65202700000009,0.00465525,2,,False,True,,
+extra-008,numerica,AAPL,31.367467749998468,0.0102555,4,,False,True,,
+extra-009,numerica,GOOGL,0.0,0.0,0,,False,False,,"ValidationError: 1 validation error for RespuestaAgente
+  Value error, No puede indicarse una unidad sin una cifra. [type=value_error, input_value={'respuesta': ""Alphabet n...3, 'tokens_salida': 296}, input_type=dict]
+    For further information visit https://errors.pydantic.dev/2.12/v/value_error"
+extra-010,numerica,AAPL,12.903846375000285,0.005034,2,,True,True,,
+extra-011,numerica,NVDA,17.794903292000527,0.003738,1,,True,True,,
+extra-012,numerica,META,11.116447417000018,0.004938,3,,True,True,,

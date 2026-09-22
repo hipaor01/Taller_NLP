@@ -1,0 +1,13 @@
+id,familia,ticker,latencia_s,coste_usd,llamadas,cita,cifra,trayectoria,recall,error
+extra-001,numerica,AMZN,25.335347208998428,0.007371,2,,True,True,,
+extra-002,numerica,AMZN,6.996477666001738,0.004854000000000001,1,,True,True,,
+extra-003,numerica,AMZN,21.72584708300201,0.00788325,2,,True,True,,
+extra-004,numerica,GOOGL,21.49887008299993,0.007398,2,,True,True,,
+extra-005,numerica,META,6.909811124998669,0.0045795,1,,True,True,,
+extra-006,numerica,NVDA,18.582825749999756,0.0055095000000000005,1,,True,True,,
+extra-007,numerica,MSFT,19.9145247919987,0.00594825,1,,True,True,,
+extra-008,numerica,AAPL,6.839491917002306,0.004572,1,,True,True,,
+extra-009,numerica,GOOGL,10.771319333001884,0.00619725,2,,True,True,,
+extra-010,numerica,AAPL,11.367758083000808,0.00565875,2,,True,True,,
+extra-011,numerica,NVDA,10.36077904099875,0.00483825,1,,True,True,,
+extra-012,numerica,META,8.812251999999717,0.006168750000000001,2,,True,True,,

@@ -29,12 +29,15 @@ if str(_DIRECTORIO_SRC) not in sys.path:
     sys.path.insert(0, str(_DIRECTORIO_SRC))
 
 VARIABLE_VARIANTE = "TALLER_VARIANTE_AGENTE"
-MODULO_BASELINE = "experimentos.baseline"
+MODULO_AGENTE_PREDETERMINADO = "experimentos.jchulvi.agente_v2"
+# Alias conservado para consumidores anteriores; ya no apunta al baseline.
+MODULO_BASELINE = MODULO_AGENTE_PREDETERMINADO
 NOMBRE_FACTORIA = "crear_constructor"
 _COLUMNAS_EVALUACION = (
     "id",
     "familia",
     "ticker",
+    "acierto",
     "latencia_s",
     "coste_usd",
     "llamadas",
@@ -71,6 +74,7 @@ def _informe_a_dataframe(
                 "id": resultado.id_pregunta,
                 "familia": resultado.familia,
                 "ticker": caso.ticker,
+                "acierto": resultado.acierto,
                 "latencia_s": respuesta.latencia_ms / 1_000,
                 "coste_usd": respuesta.coste_usd or 0.0,
                 "llamadas": len(respuesta.llamadas),
@@ -98,6 +102,29 @@ def resumir(tabla: pd.DataFrame, etiqueta: str) -> dict[str, float | str]:
         valores = tabla[columna].dropna() if columna in tabla else ()
         return float(valores.mean()) if len(valores) else float("nan")
 
+    def aciertos_familia(familia: str) -> str:
+        if "familia" not in tabla:
+            return "0/0"
+        filas = tabla.loc[tabla["familia"] == familia]
+        total = len(filas)
+
+        def criterio_correcto(nombre: str) -> pd.Series:
+            if nombre not in filas:
+                return pd.Series(False, index=filas.index, dtype=bool)
+            return filas[nombre].eq(True).fillna(False)
+
+        if "acierto" in filas:
+            aciertos = int(criterio_correcto("acierto").sum())
+            return f"{aciertos}/{total}"
+
+        criterios = criterio_correcto("trayectoria")
+        if familia in {"numerica", "comparativa"}:
+            criterios &= criterio_correcto("cifra")
+        if familia in {"extractiva", "comparativa"}:
+            criterios &= criterio_correcto("cita")
+        aciertos = int(criterios.sum())
+        return f"{aciertos}/{total}"
+
     return {
         "versión": etiqueta_normalizada,
         "cita": tasa("cita"),
@@ -119,6 +146,9 @@ def resumir(tabla: pd.DataFrame, etiqueta: str) -> dict[str, float | str]:
             if "llamadas" in tabla
             else float("nan")
         ),
+        "aciertos extractiva": aciertos_familia("extractiva"),
+        "aciertos numerica": aciertos_familia("numerica"),
+        "aciertos comparativa": aciertos_familia("comparativa"),
     }
 
 
@@ -148,7 +178,10 @@ def _crear_constructor_configurado(
     ruta_progreso: str | Path | None = None,
 ) -> ConstructorAgente:
     """Carga la factoría común de la variante seleccionada por el entorno."""
-    nombre_modulo = os.getenv(VARIABLE_VARIANTE, MODULO_BASELINE).strip()
+    nombre_modulo = os.getenv(
+        VARIABLE_VARIANTE,
+        MODULO_AGENTE_PREDETERMINADO,
+    ).strip()
     if not nombre_modulo:
         raise ValueError(f"{VARIABLE_VARIANTE} no puede estar vacía.")
 
@@ -192,10 +225,11 @@ class _RuntimeNotebook:
         if not pregunta_normalizada:
             raise ValueError("La pregunta no puede estar vacía.")
 
-        ejecucion = self.motor.ejecutar(
-            pregunta_normalizada,
-            thread_id=thread_id if thread_id is not None else "s2",
-        )
+        with self.constructor.sesion_ejecucion():
+            ejecucion = self.motor.ejecutar(
+                pregunta_normalizada,
+                thread_id=thread_id if thread_id is not None else "s2",
+            )
         return {
             **ejecucion.estado,
             # El notebook multiplica directamente este valor y no admite None.
@@ -222,11 +256,12 @@ class _RuntimeNotebook:
         ruta = Path(ruta_jsonl)
         if not ruta.is_file():
             raise FileNotFoundError(f"No existe el golden set: {ruta}")
-        return self.constructor.evaluador.evaluar(
-            nombre_agente=self.constructor.nombre,
-            responder=self.motor.responder,
-            ruta_jsonl=ruta,
-        )
+        with self.constructor.sesion_ejecucion():
+            return self.constructor.evaluador.evaluar(
+                nombre_agente=self.constructor.nombre,
+                responder=self.motor.responder,
+                ruta_jsonl=ruta,
+            )
 
     def evaluar(
         self,

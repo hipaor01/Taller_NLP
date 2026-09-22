@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import tempfile
 import unittest
+from contextlib import contextmanager
 from pathlib import Path
 from unittest.mock import patch
 
@@ -175,12 +176,23 @@ class TestConstructorAgente(unittest.TestCase):
                 modelo="modelo", system_prompt="prompt"
             )
             telemetria = RegistroTelemetriaAuxiliar()
+            eventos: list[str] = []
+
+            @contextmanager
+            def recurso():
+                eventos.append("abrir")
+                try:
+                    yield
+                finally:
+                    eventos.append("cerrar")
+
             original = ConstructorAgente(
                 "agente",
                 configuracion,
                 corpus,
                 crear_fabrica_prueba(corpus),
                 telemetria_auxiliar=telemetria,
+                recursos_ejecucion=(recurso,),
                 k_retrieval=3,
                 tolerancia_absoluta=0.5,
                 tolerancia_relativa=0.01,
@@ -204,6 +216,7 @@ class TestConstructorAgente(unittest.TestCase):
                 original.control_peticiones,
             )
             self.assertIs(copia.telemetria_auxiliar, telemetria)
+            self.assertEqual(copia.recursos_ejecucion, (recurso,))
             self.assertIs(copia.esquema_respuesta, original.esquema_respuesta)
             self.assertEqual(copia.evaluador.k_retrieval, 3)
             self.assertEqual(copia.evaluador.tolerancia_absoluta, 0.5)
@@ -212,6 +225,11 @@ class TestConstructorAgente(unittest.TestCase):
             self.assertEqual(copia.evaluador.minimo_comparativas, 1)
             self.assertEqual(copia.evaluador.ruta_progreso, ruta.resolve())
             self.assertIsNone(original.evaluador.ruta_progreso)
+
+            with copia.sesion_ejecucion():
+                with copia.sesion_ejecucion():
+                    self.assertEqual(eventos, ["abrir"])
+            self.assertEqual(eventos, ["abrir", "cerrar"])
 
     def test_rechaza_un_esquema_de_respuesta_incompatible(self) -> None:
         with tempfile.TemporaryDirectory() as temporal:

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import tempfile
 import unittest
+from contextlib import contextmanager
 from pathlib import Path
 
 from taller_nlp import AgenteFinanciero, InformeEvaluacion, RespuestaAgente
@@ -101,6 +102,34 @@ class TestAgenteFinanciero(unittest.TestCase):
             )
             self.assertEqual(agente.evaluar(ruta).nombre_agente, "equipo-a")
             self.assertEqual(evaluador.nombre_recibido, "equipo-a")
+
+    def test_activa_y_libera_los_recursos_al_responder(self) -> None:
+        eventos: list[str] = []
+
+        @contextmanager
+        def sesion():
+            eventos.append("abrir")
+            try:
+                yield
+            finally:
+                eventos.append("cerrar")
+
+        agente = AgenteFinanciero(
+            "equipo-a",
+            MotorControlado(
+                RespuestaAgente(
+                    respuesta="ok",
+                    fuente="ninguna",
+                    latencia_ms=0,
+                )
+            ),
+            EvaluadorControlado(informe_vacio_logico("equipo-a")),
+            sesion_ejecucion=sesion,
+        )
+
+        agente.responder("pregunta")
+
+        self.assertEqual(eventos, ["abrir", "cerrar"])
 
 
 if __name__ == "__main__":

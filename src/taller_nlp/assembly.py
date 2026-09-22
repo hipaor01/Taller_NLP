@@ -18,6 +18,10 @@ from .evaluation import EvaluadorFinanciero
 from .langchain_engine import MotorLangChain
 from .model_resilience import ControlPeticionesModelo
 from .contracts import RespuestaFinanciera
+from .runtime_resources import (
+    FabricaRecursoEjecucion,
+    GestorRecursosEjecucion,
+)
 from .tool_factory import FabricaHerramientas
 
 
@@ -42,6 +46,7 @@ class ConstructorAgente:
         "_modelo",
         "_control_peticiones",
         "_telemetria_auxiliar",
+        "_gestor_recursos",
     )
 
     def __init__(
@@ -56,6 +61,7 @@ class ConstructorAgente:
         modelo: BaseChatModel | None = None,
         control_peticiones: ControlPeticionesModelo | None = None,
         telemetria_auxiliar: RegistroTelemetriaAuxiliar | None = None,
+        recursos_ejecucion: Sequence[FabricaRecursoEjecucion] = (),
         k_retrieval: int = 5,
         tolerancia_absoluta: float = 1.0,
         tolerancia_relativa: float = 1e-6,
@@ -108,6 +114,7 @@ class ConstructorAgente:
                 "telemetria_auxiliar debe ser un RegistroTelemetriaAuxiliar."
             )
         self._telemetria_auxiliar = telemetria_auxiliar
+        self._gestor_recursos = GestorRecursosEjecucion(recursos_ejecucion)
         # Crear el evaluador aquí reutiliza su propia validación de opciones y
         # lo liga necesariamente al mismo corpus que el resto de componentes.
         self._evaluador = EvaluadorFinanciero(
@@ -160,6 +167,15 @@ class ConstructorAgente:
     def telemetria_auxiliar(self) -> RegistroTelemetriaAuxiliar | None:
         return self._telemetria_auxiliar
 
+    @property
+    def recursos_ejecucion(self) -> tuple[FabricaRecursoEjecucion, ...]:
+        """Factorías de recursos externos activados solo al ejecutar."""
+        return self._gestor_recursos.fabricas
+
+    def sesion_ejecucion(self):
+        """Abre los recursos de la variante durante una operación del agente."""
+        return self._gestor_recursos.sesion()
+
     def construir_motor(
         self,
         *,
@@ -186,6 +202,7 @@ class ConstructorAgente:
             nombre=self._nombre,
             motor=motor,
             evaluador=self._evaluador,
+            sesion_ejecucion=self.sesion_ejecucion,
         )
 
     def con_ruta_progreso(
@@ -204,6 +221,7 @@ class ConstructorAgente:
             modelo=self._modelo,
             control_peticiones=self._control_peticiones,
             telemetria_auxiliar=self._telemetria_auxiliar,
+            recursos_ejecucion=self.recursos_ejecucion,
             k_retrieval=evaluador.k_retrieval,
             tolerancia_absoluta=evaluador.tolerancia_absoluta,
             tolerancia_relativa=evaluador.tolerancia_relativa,

@@ -1,0 +1,13 @@
+id,familia,ticker,acierto,latencia_s,coste_usd,llamadas,cita,cifra,trayectoria,recall,error
+extra-001,numerica,AMZN,False,40.52482054200027,0.002132288,3,,False,True,,
+extra-002,numerica,AMZN,False,23.02365991700026,0.002330536,3,,False,True,,
+extra-003,numerica,AMZN,False,78.79218395800036,0.002044376,3,,False,True,,
+extra-004,numerica,GOOGL,True,14.49129158300002,0.002009408,3,,True,True,,
+extra-005,numerica,META,False,16.249566375000086,0.002130368,3,,False,True,,
+extra-006,numerica,NVDA,True,6.82708116699996,0.000387616,2,,True,True,,
+extra-007,numerica,MSFT,False,34.58030720899979,0.002102816,3,,False,True,,
+extra-008,numerica,AAPL,False,14.115015249999942,0.001664336,3,,False,True,,
+extra-009,numerica,GOOGL,False,20.607144874999904,0.0006829840000000001,3,,False,True,,
+extra-010,numerica,AAPL,True,33.962557542000006,0.000377736,2,,True,True,,
+extra-011,numerica,NVDA,True,40.558570707999934,0.00035105600000000004,1,,True,True,,
+extra-012,numerica,META,True,23.850129208999988,0.000464176,2,,True,True,,

@@ -59,22 +59,34 @@ sin abreviar y que el crecimiento figure únicamente en respuesta.
 def crear_constructor(*, ruta_progreso=None):
     """Configura la variante sobre el índice y el motor compartido de jchulvi."""
     qdrant = qdrant_local.QdrantLocal(
-        agente.DIRECTORIO_RESULTADOS, ruta_indice=agente.ruta_indice_cloud(),
+        agente.DIRECTORIO_RESULTADOS,
+        ruta_indice=agente.ruta_indice_cloud(),
         corpus=agente.baseline.crear_corpus_baseline(),
-        modelo=agente.MODELO_EMBEDDINGS, contrato=agente.CONTRATO_EMBEDDINGS,
+        modelo=agente.MODELO_EMBEDDINGS,
+        contrato=agente.CONTRATO_EMBEDDINGS,
     )
-    infraestructura = agente.crear_constructor(modo="denso", guardrail=False,
-                                   qdrant_url=qdrant.url, coleccion=qdrant.coleccion,
-                                   ruta_progreso=ruta_progreso)
+    infraestructura = agente.crear_constructor(
+        modo="denso",
+        guardrail=False,
+        qdrant_url=qdrant.url,
+        coleccion=qdrant.coleccion,
+        ruta_progreso=ruta_progreso,
+    )
     return ConstructorAgente(
         nombre=NOMBRE,
-        configuracion=infraestructura.configuracion.model_copy(update={
-            "system_prompt": INSTRUCCIONES, "max_iteraciones": 6,
-        }),
-        corpus=infraestructura.corpus, fabrica_herramientas=infraestructura.fabrica_herramientas,
-        modelo=infraestructura.modelo, control_peticiones=infraestructura.control_peticiones,
+        configuracion=infraestructura.configuracion.model_copy(
+            update={
+                "system_prompt": INSTRUCCIONES,
+                "max_iteraciones": 6,
+            }
+        ),
+        corpus=infraestructura.corpus,
+        fabrica_herramientas=infraestructura.fabrica_herramientas,
+        modelo=infraestructura.modelo,
+        control_peticiones=infraestructura.control_peticiones,
         k_retrieval=infraestructura.evaluador.k_retrieval,
         tolerancia_absoluta=infraestructura.evaluador.tolerancia_absoluta,
         tolerancia_relativa=infraestructura.evaluador.tolerancia_relativa,
+        recursos_ejecucion=(qdrant.sesion,),
         ruta_progreso=ruta_progreso,
     )

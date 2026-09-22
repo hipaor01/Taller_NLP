@@ -40,6 +40,10 @@ from .model_resilience import (
     ReintentoRateLimitMiddleware,
 )
 from .evaluation_progress import AlmacenProgresoEvaluacion, ContextoProgreso
+from .runtime_resources import (
+    FabricaRecursoEjecucion,
+    GestorRecursosEjecucion,
+)
 
 __all__ = [
     "AgenteFinanciero",
@@ -62,9 +66,11 @@ __all__ = [
     "EjecucionLangChain",
     "DescriptorComponente",
     "FabricaHerramientas",
+    "FabricaRecursoEjecucion",
     "FragmentoCorpus",
     "FragmentoRecuperado",
     "InformeEvaluacion",
+    "GestorRecursosEjecucion",
     "IndexadorCorpus",
     "LlamadaHerramienta",
     "LlamadaModeloAuxiliar",

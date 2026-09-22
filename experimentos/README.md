@@ -39,8 +39,10 @@ def crear_constructor() -> ConstructorAgente:
     ...
 ```
 
-La interfaz usa el baseline por defecto. Para seleccionar otra variante antes
-de la primera llamada a `responder()`:
+La interfaz usa `experimentos.jchulvi.agente_v2` por defecto. Esta variante
+declara Qdrant como recurso de ejecución: la fachada lo inicia, valida/carga y
+detiene automáticamente alrededor de cada respuesta o evaluación. Para
+seleccionar otra variante antes de la primera llamada a `responder()`:
 
 ```bash
 export TALLER_VARIANTE_AGENTE=experimentos.higinio.agente_v002
@@ -57,11 +59,13 @@ limpio y guardar la tabla compatible con el notebook:
 from agente import evaluar, resumir
 
 tabla = evaluar("holdout.jsonl", salida="resultados/holdout.csv")
-fila_informe = resumir(tabla, "baseline")
+fila_informe = resumir(tabla, "jchulvi-v2")
 ```
 
 `evaluar_informe("holdout.jsonl")` conserva alternativamente el informe
 estructurado completo, con el desglose por pregunta y las métricas agregadas.
+El resumen incluye los aciertos por familia en formato `correctas/total` para
+`extractiva`, `numerica` y `comparativa`.
 
 La misma evaluación puede lanzarse directamente desde la terminal:
 

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import io
+import json
 import os
 import tempfile
 import unittest
@@ -12,9 +13,70 @@ import pandas as pd
 
 from agente.__main__ import _ruta_progreso_automatica, main
 from agente.interfaz import VARIABLE_VARIANTE
+from taller_nlp import RespuestaFinanciera
 
 
 class TestCliAgente(unittest.TestCase):
+    def test_responde_en_json_y_selecciona_variante(self) -> None:
+        stdout = io.StringIO()
+        resultado = {
+            "structured_response": RespuestaFinanciera(
+                respuesta="Apple obtuvo 100 USD.",
+                cifra=100,
+                unidad="USD",
+                fuente="xbrl",
+            ),
+            "messages": (),
+            "coste_usd": 0.001,
+        }
+
+        with patch.dict(os.environ, {}, clear=False):
+            os.environ.pop(VARIABLE_VARIANTE, None)
+            with patch(
+                "agente.__main__.responder",
+                return_value=resultado,
+            ) as responder_mock:
+                with redirect_stdout(stdout):
+                    codigo = main(
+                        [
+                            "--responder",
+                            "¿Cuál fue el beneficio de Apple?",
+                            "--variante",
+                            "experimentos.equipo.agente_v002",
+                        ]
+                    )
+
+            self.assertEqual(
+                os.environ[VARIABLE_VARIANTE],
+                "experimentos.equipo.agente_v002",
+            )
+
+        self.assertEqual(codigo, 0)
+        responder_mock.assert_called_once_with(
+            "¿Cuál fue el beneficio de Apple?"
+        )
+        impreso = json.loads(stdout.getvalue())
+        self.assertEqual(
+            impreso["structured_response"]["respuesta"],
+            "Apple obtuvo 100 USD.",
+        )
+        self.assertEqual(impreso["messages"], [])
+        self.assertEqual(impreso["coste_usd"], 0.001)
+
+    def test_responder_rechaza_salida_csv(self) -> None:
+        with redirect_stderr(io.StringIO()):
+            with self.assertRaises(SystemExit) as contexto:
+                main(
+                    [
+                        "--responder",
+                        "Pregunta",
+                        "--salida",
+                        "respuesta.csv",
+                    ]
+                )
+
+        self.assertEqual(contexto.exception.code, 2)
+
     def test_evalua_guarda_y_selecciona_variante(self) -> None:
         with tempfile.TemporaryDirectory() as temporal:
             raiz = Path(temporal)

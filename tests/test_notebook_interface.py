@@ -4,6 +4,7 @@ import tempfile
 import unittest
 import os
 import math
+from contextlib import nullcontext
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
@@ -12,7 +13,7 @@ from langchain_core.messages import AIMessage, ToolMessage
 
 import miax_s2
 from agente.interfaz import (
-    MODULO_BASELINE,
+    MODULO_AGENTE_PREDETERMINADO,
     VARIABLE_VARIANTE,
     _RuntimeNotebook,
     _crear_constructor_configurado,
@@ -54,26 +55,54 @@ class TestInterfazNotebook(unittest.TestCase):
 
         tabla = pd.DataFrame(
             {
-                "cita": [True, False],
-                "cifra": [None, True],
-                "trayectoria": [True, False],
-                "recall": [1.0, None],
-                "coste_usd": [0.01, 0.03],
-                "latencia_s": [1.0, 3.0],
-                "llamadas": [2, 4],
+                "familia": [
+                    "extractiva",
+                    "numerica",
+                    "comparativa",
+                    "comparativa",
+                ],
+                "acierto": [True, True, True, False],
+                "cita": [True, None, True, False],
+                "cifra": [None, True, True, True],
+                "trayectoria": [True, True, True, False],
+                "recall": [1.0, None, 1.0, 0.0],
+                "coste_usd": [0.01, 0.03, 0.02, 0.02],
+                "latencia_s": [1.0, 3.0, 2.0, 2.0],
+                "llamadas": [2, 4, 3, 3],
             }
         )
 
         resumen = resumir(tabla, "  baseline  ")
 
         self.assertEqual(resumen["versión"], "baseline")
-        self.assertEqual(resumen["cita"], 0.5)
+        self.assertEqual(resumen["cita"], 2 / 3)
         self.assertEqual(resumen["cifra"], 1.0)
-        self.assertEqual(resumen["trayectoria"], 0.5)
-        self.assertEqual(resumen["recall@5"], 1.0)
+        self.assertEqual(resumen["trayectoria"], 0.75)
+        self.assertEqual(resumen["recall@5"], 2 / 3)
         self.assertEqual(resumen["coste medio (¢)"], 2.0)
         self.assertEqual(resumen["latencia media (s)"], 2.0)
         self.assertEqual(resumen["llamadas/pregunta"], 3.0)
+        self.assertEqual(resumen["aciertos extractiva"], "1/1")
+        self.assertEqual(resumen["aciertos numerica"], "1/1")
+        self.assertEqual(resumen["aciertos comparativa"], "1/2")
+
+    def test_resumir_reconstruye_aciertos_de_un_csv_antiguo(self) -> None:
+        import pandas as pd
+
+        tabla = pd.DataFrame(
+            {
+                "familia": ["extractiva", "numerica", "comparativa"],
+                "cita": [True, None, True],
+                "cifra": [None, True, True],
+                "trayectoria": [True, False, True],
+            }
+        )
+
+        resumen = resumir(tabla, "anterior")
+
+        self.assertEqual(resumen["aciertos extractiva"], "1/1")
+        self.assertEqual(resumen["aciertos numerica"], "0/1")
+        self.assertEqual(resumen["aciertos comparativa"], "1/1")
 
     def test_resumir_valida_entrada_y_admite_columnas_ausentes(self) -> None:
         import pandas as pd
@@ -87,7 +116,7 @@ class TestInterfazNotebook(unittest.TestCase):
         self.assertTrue(math.isnan(resumen["cita"]))
         self.assertTrue(math.isnan(resumen["coste medio (¢)"]))
 
-    def test_selecciona_el_baseline_por_defecto(self) -> None:
+    def test_selecciona_jchulvi_v2_por_defecto(self) -> None:
         constructor = object()
         modulo = SimpleNamespace(crear_constructor=lambda: constructor)
         with patch.dict(os.environ, {}, clear=False):
@@ -96,7 +125,11 @@ class TestInterfazNotebook(unittest.TestCase):
                 resultado = _crear_constructor_configurado()
 
         self.assertIs(resultado, constructor)
-        cargar.assert_called_once_with(MODULO_BASELINE)
+        cargar.assert_called_once_with(MODULO_AGENTE_PREDETERMINADO)
+        self.assertEqual(
+            MODULO_AGENTE_PREDETERMINADO,
+            "experimentos.jchulvi.agente_v2",
+        )
 
     def test_selecciona_otra_variante_por_variable_de_entorno(self) -> None:
         constructor = object()
@@ -171,7 +204,7 @@ class TestInterfazNotebook(unittest.TestCase):
             )
         )
         runtime = _RuntimeNotebook(
-            constructor=Mock(),
+            constructor=Mock(sesion_ejecucion=nullcontext),
             motor=motor,  # type: ignore[arg-type]
         )
 
@@ -207,7 +240,7 @@ class TestInterfazNotebook(unittest.TestCase):
             )
         )
         runtime = _RuntimeNotebook(
-            constructor=Mock(),
+            constructor=Mock(sesion_ejecucion=nullcontext),
             motor=motor,  # type: ignore[arg-type]
         )
 
@@ -227,6 +260,7 @@ class TestInterfazNotebook(unittest.TestCase):
             constructor = SimpleNamespace(
                 nombre="baseline-notebook-s1",
                 evaluador=evaluador,
+                sesion_ejecucion=nullcontext,
             )
             motor = _MotorControlado(
                 EjecucionLangChain(
@@ -317,6 +351,7 @@ class TestInterfazNotebook(unittest.TestCase):
                 nombre="baseline-notebook-s1",
                 evaluador=evaluador,
                 corpus=object(),
+                sesion_ejecucion=nullcontext,
             )
             runtime = _RuntimeNotebook(
                 constructor=constructor,  # type: ignore[arg-type]
@@ -343,6 +378,7 @@ class TestInterfazNotebook(unittest.TestCase):
                     "id",
                     "familia",
                     "ticker",
+                    "acierto",
                     "latencia_s",
                     "coste_usd",
                     "llamadas",
