@@ -10,9 +10,9 @@ Ejecuta todos los comandos desde la raíz del repositorio.
 
 ### Ubicación del código principal
 
-`agente_v2.py` conserva los contratos comunes de las cuatro herramientas, pero
-hereda de la versión anterior algunos cambios en `search_filings` y en las
-descripciones entregadas al modelo:
+`agente_v3.py` conserva los contratos comunes de las cuatro herramientas y
+reutiliza la composición previa de `search_filings` y las descripciones
+entregadas al modelo:
 
 - El recuperador personalizado que determina el comportamiento efectivo de
   `search_filings` está en
@@ -204,7 +204,7 @@ del agente predeterminado sobre `golden_set.jsonl`:
 | Agente | Cita | Cifra | Trayectoria | Recall@5 | Aciertos extractiva | Aciertos numérica | Aciertos comparativa | Coste medio (¢) | Latencia media (s) | Llamadas/pregunta |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 | Baseline | 42,9 % | 85,7 % | 75,0 % | 42,9 % | 5/6 | 6/6 | 0/8 | 0,7592 | 14,87 | 3,10 |
-| Jchulvi v2 | 100,0 % | 100,0 % | 100,0 % | 92,9 % | 6/6 | 6/6 | 8/8 | 0,1376 | 25,91 | 3,10 |
+| Jchulvi v3 | 100,0 % | 100,0 % | 100,0 % | 85,7 % | 6/6 | 6/6 | 8/8 | 0,1234 | 16,34 | 2,80 |
 
 Los aciertos por familia del baseline se han reconstruido desde
 [`resultados/baseline.csv`](resultados/baseline.csv), ya que su resumen histórico no
@@ -213,7 +213,7 @@ incluía esas columnas. La versión actual de `--resumir` sí las calcula.
 Los CSV resumidos utilizados como fuente son:
 
 - [`resultados/resumen_baseline.csv`](resultados/resumen_baseline.csv)
-- [`resultados/resumen_jchulvi_v2.csv`](resultados/resumen_jchulvi_v2.csv)
+- [`resultados/resumen_jchulvi_v3.csv`](resultados/resumen_jchulvi_v3.csv)
 
 Pueden regenerarse a partir de sus evaluaciones detalladas mediante la operación
 `--resumir` de la CLI:
@@ -225,14 +225,14 @@ python -m agente \
   --salida resultados/resumen_baseline.csv
 
 python -m agente \
-  --resumir resultados/evaluacion_jchulvi_v2.csv \
-  --etiqueta jchulvi-v2 \
-  --salida resultados/resumen_jchulvi_v2.csv
+  --resumir resultados/evaluacion_jchulvi_v3.csv \
+  --etiqueta jchulvi-v3 \
+  --salida resultados/resumen_jchulvi_v3.csv
 ```
 
 Las evaluaciones detalladas de entrada están en
 [`resultados/baseline.csv`](resultados/baseline.csv) y
-[`resultados/evaluacion_jchulvi_v2.csv`](resultados/evaluacion_jchulvi_v2.csv).
+[`resultados/evaluacion_jchulvi_v3.csv`](resultados/evaluacion_jchulvi_v3.csv).
 Si se omite `--salida`, el resumen se muestra por pantalla sin escribir ningún
 archivo.
 
