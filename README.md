@@ -8,6 +8,37 @@ evaluar un conjunto JSONL. Su código está en
 [`experimentos/jchulvi/agente_v3.py`](experimentos/jchulvi/agente_v3.py).
 Ejecuta todos los comandos desde la raíz del repositorio.
 
+### Ubicación del código principal
+
+`agente_v2.py` conserva los contratos comunes de las cuatro herramientas, pero
+hereda de la versión anterior algunos cambios en `search_filings` y en las
+descripciones entregadas al modelo:
+
+- El recuperador personalizado que determina el comportamiento efectivo de
+  `search_filings` está en
+  [`RecuperadorHibrido`](experimentos/jchulvi/agente.py#L244-L340).
+- Las descripciones personalizadas de `get_xbrl_fact` y `search_filings`, junto
+  con su conexión a la fábrica, están en la función `crear_constructor()` del
+  mismo archivo: [`crear_constructor()`](experimentos/jchulvi/agente.py#L423-L475).
+- La fábrica compartida, los contratos de las cuatro tools y sus
+  implementaciones comunes se encuentran en
+  [`FabricaHerramientas`](src/taller_nlp/tool_factory.py#L77-L366). Ahí están
+  las implementaciones base de `list_available`, `get_xbrl_fact`,
+  `search_filings` y `read_section`.
+- El evaluador común que carga los casos, comprueba cifras, trayectorias, citas
+  y `recall@k` está en
+  [`EvaluadorFinanciero`](src/taller_nlp/evaluation.py#L37-L365).
+- El esquema y validador común de los conjuntos JSONL está en
+  [`CasoGolden`](src/taller_nlp/golden.py#L26-L276). Su método
+  [`cargar_jsonl()`](src/taller_nlp/golden.py#L238-L276) comprueba el JSON de
+  cada línea, los campos obligatorios, las reglas de cada familia, los
+  identificadores duplicados y la coherencia con el corpus.
+- Las funciones públicas
+  [`responder()`](agente/interfaz.py#L306-L308) y
+  [`evaluar()`](agente/interfaz.py#L311-L323) están en `agente/interfaz.py`.
+  Su exposición mediante `python -m agente --responder` y `--evaluar` se
+  implementa en [`agente/__main__.py`](agente/__main__.py#L148-L268).
+
 ### 1. Requisitos
 
 - **Git**.
@@ -164,6 +195,46 @@ tabla = evaluar(
 )
 print(tabla)
 ```
+
+#### Comparación de resultados resumidos
+
+La tabla siguiente compara las columnas comunes de los resúmenes del baseline y
+del agente predeterminado sobre `golden_set.jsonl`:
+
+| Agente | Cita | Cifra | Trayectoria | Recall@5 | Aciertos extractiva | Aciertos numérica | Aciertos comparativa | Coste medio (¢) | Latencia media (s) | Llamadas/pregunta |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Baseline | 42,9 % | 85,7 % | 75,0 % | 42,9 % | 5/6 | 6/6 | 0/8 | 0,7592 | 14,87 | 3,10 |
+| Jchulvi v2 | 100,0 % | 100,0 % | 100,0 % | 92,9 % | 6/6 | 6/6 | 8/8 | 0,1376 | 25,91 | 3,10 |
+
+Los aciertos por familia del baseline se han reconstruido desde
+[`resultados/baseline.csv`](resultados/baseline.csv), ya que su resumen histórico no
+incluía esas columnas. La versión actual de `--resumir` sí las calcula.
+
+Los CSV resumidos utilizados como fuente son:
+
+- [`resultados/resumen_baseline.csv`](resultados/resumen_baseline.csv)
+- [`resultados/resumen_jchulvi_v2.csv`](resultados/resumen_jchulvi_v2.csv)
+
+Pueden regenerarse a partir de sus evaluaciones detalladas mediante la operación
+`--resumir` de la CLI:
+
+```bash
+python -m agente \
+  --resumir resultados/baseline.csv \
+  --etiqueta baseline \
+  --salida resultados/resumen_baseline.csv
+
+python -m agente \
+  --resumir resultados/evaluacion_jchulvi_v2.csv \
+  --etiqueta jchulvi-v2 \
+  --salida resultados/resumen_jchulvi_v2.csv
+```
+
+Las evaluaciones detalladas de entrada están en
+[`resultados/baseline.csv`](resultados/baseline.csv) y
+[`resultados/evaluacion_jchulvi_v2.csv`](resultados/evaluacion_jchulvi_v2.csv).
+Si se omite `--salida`, el resumen se muestra por pantalla sin escribir ningún
+archivo.
 
 ### 7. Docker y solución de problemas
 
