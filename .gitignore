@@ -49,6 +49,11 @@ htmlcov/
 
 # Salidas reproducibles: se regeneran a partir de código y manifiestos
 experimentos/**/resultados/
+!experimentos/resultados/
+experimentos/resultados/*
+!experimentos/resultados/progreso/
+experimentos/resultados/progreso/*
+!experimentos/resultados/progreso/agente_v3_holdout_784f694b04ea_citas-v5.json
 experimentos/**/artefactos/
 
 # Golden set adicional reservado para pruebas locales
