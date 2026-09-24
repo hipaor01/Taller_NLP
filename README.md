@@ -215,6 +215,116 @@ Los CSV resumidos utilizados como fuente son:
 - [`resultados/resumen_baseline.csv`](resultados/resumen_baseline.csv)
 - [`resultados/resumen_jchulvi_v3.csv`](resultados/resumen_jchulvi_v3.csv)
 
+Los resultados de la evaluación sobre el holdout están disponibles en:
+
+- [Evaluación detallada del holdout](resultados/evaluacion_holdout.csv)
+- [Resumen de la evaluación del holdout](resultados/resumen_holdout.csv)
+
+#### Respuestas del holdout
+
+Las siguientes respuestas finales se han extraído del
+[progreso de la evaluación](experimentos/resultados/progreso/agente_v3_holdout_784f694b04ea_citas-v5.json)
+y se presentan junto a las preguntas de `holdout.jsonl`:
+
+1. **ho-001 — ¿Qué dice NVIDIA en su 10-K de FY2024 sobre las garantías de
+   suministro de obleas y componentes?**
+
+   En su 10-K de FY2024, NVIDIA reconoce que NO dispone de garantías de
+   suministro de obleas, componentes ni capacidad. La compañía depende de
+   fundiciones y subcontratistas de terceros para fabricar sus obleas de
+   semiconductores y ensamblar sus productos, y señala que no se le garantiza
+   el suministro de obleas, componentes ni capacidad, lo que reduce su control
+   sobre la cantidad, calidad, rendimientos de fabricación y calendarios de
+   entrega. También advierte del riesgo de falta de suministro garantizado, de
+   precios más altos de obleas y componentes, y de la dependencia de un número
+   limitado y geográficamente concentrado de proveedores y fundiciones.
+
+2. **ho-002 — ¿Cuáles son las principales exposiciones a divisas de Alphabet
+   según el apartado de riesgo de mercado de su 10-K de 2025?**
+
+   Según el apartado de riesgo de mercado (Item 7A) del 10-K de 2025 de
+   Alphabet, las principales exposiciones a divisas son las fluctuaciones de
+   los tipos de cambio frente al dólar estadounidense en el dólar australiano,
+   la libra esterlina, el dólar canadiense, el euro y el yen japonés. Estas
+   exposiciones provienen de los ingresos internacionales, los activos y
+   pasivos monetarios denominados en moneda extranjera y las inversiones en
+   filiales extranjeras, y se gestionan mediante instrumentos derivados y no
+   derivados (forwards, opciones, swaps de divisas cruzadas y deuda en moneda
+   extranjera).
+
+3. **ho-003 — ¿Qué ocurrió con las ventas de Apple en la Gran China en 2025 y
+   a qué se debió?**
+
+   Las ventas netas de Apple en la Gran China disminuyeron un 4% en 2025,
+   pasando de 66.952 millones de USD en 2024 a 64.377 millones de USD en 2025.
+   Esta caída se debió principalmente a menores ventas de iPhone, compensadas
+   parcialmente por mayores ventas de Mac.
+
+4. **ho-004 — ¿Cuál era el activo total de Microsoft al cierre del ejercicio
+   fiscal 2024?**
+
+   El activo total de Microsoft al cierre del ejercicio fiscal 2024 fue de
+   512.163 millones de dólares (512.163.000.000 USD).
+
+5. **ho-005 — ¿Cuál fue el beneficio bruto de Amazon en 2025?**
+
+   Amazon no reportó el concepto de beneficio bruto (`GrossProfit`) en su
+   informe 10-K del ejercicio 2025. El dato solicitado no está disponible en
+   el corpus.
+
+6. **ho-006 — ¿Cuál fue el revenue de NVIDIA en el ejercicio fiscal 2023?**
+
+   El ejercicio fiscal 2023 de NVIDIA no está disponible en el corpus (solo
+   existen los ejercicios 2024 y 2025), por lo que no se puede reportar el
+   revenue solicitado.
+
+7. **ho-007 — ¿Cuánto crecieron los ingresos de Apple entre FY2024 y FY2025, y
+   qué explica la evolución del iPhone?**
+
+   Los ingresos (net sales) de Apple crecieron de 391.035 millones de USD en
+   FY2024 a 416.161 millones de USD en FY2025, un aumento de 25.126 millones de
+   USD (~6,4%). En cuanto al iPhone, sus ventas netas pasaron de 201.183 a
+   209.586 millones de USD (+4%), y la compañía explica que el incremento se
+   debió a mayores ventas de los modelos Pro.
+
+8. **ho-008 — ¿Cuánto aumentó el gasto en I+D de Alphabet entre 2024 y 2025, y
+   qué advierte la compañía sobre la relación entre el gasto en compensación y
+   la plantilla?**
+
+   El gasto en I+D de Alphabet pasó de 49.326 millones de USD en 2024 a 61.087
+   millones de USD en 2025, lo que supone un aumento de 11.761 millones de USD
+   (unos 11,8 mil millones, +24%). En cuanto a la relación entre compensación y
+   plantilla, la compañía advierte que las fluctuaciones en los gastos de
+   compensación de los empleados pueden no correlacionarse directamente con
+   los cambios en la plantilla, debido a factores como las concesiones anuales
+   de SBC (stock-based compensation) que se devengan a lo largo del tiempo.
+
+9. **ho-009 — ¿Cómo cambió el beneficio bruto de NVIDIA entre FY2024 y FY2025,
+   y qué margen bruto reportó en cada ejercicio?**
+
+   El beneficio bruto (gross profit) de NVIDIA pasó de 44.301 millones de USD
+   en FY2024 a 97.858 millones de USD en FY2025, lo que supone un aumento de
+   53.557 millones de USD (más del doble). En cuanto al margen bruto, NVIDIA
+   reportó un 72,7% en FY2024 y un 75,0% en FY2025, un incremento de 2,3 puntos
+   porcentuales, impulsado principalmente por una mayor proporción de ingresos
+   de Data Center.
+
+10. **ho-010 — ¿Cómo evolucionó el beneficio operativo de Microsoft entre
+    FY2024 y FY2025, y qué dice la dirección sobre sus segmentos?**
+
+    El beneficio operativo (operating income) de Microsoft pasó de 109.433
+    millones de USD en FY2024 a 128.528 millones de USD en FY2025, un aumento
+    de 19.095 millones de USD, equivalente a un 17%. La dirección atribuye el
+    crecimiento a los tres segmentos reportables: Productivity and Business
+    Processes (operating income de 69.773 M USD, +17%), Intelligent Cloud
+    (44.589 M USD, +18%, impulsado por Azure) y More Personal Computing (14.166
+    M USD, +18%, impulsado por Gaming y Search and news advertising). La
+    dirección señala que el margen bruto de Microsoft Cloud bajó al 69% por el
+    impacto de escalar la infraestructura de IA, compensado en parte por
+    ganancias de eficiencia en Azure, y que los gastos operativos aumentaron
+    un 6% por las inversiones en ingeniería de cloud e IA y por Gaming,
+    incluido el efecto de la adquisición de Activision Blizzard.
+
 Pueden regenerarse a partir de sus evaluaciones detalladas mediante la operación
 `--resumir` de la CLI:
 

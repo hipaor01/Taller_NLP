@@ -1,0 +1,2 @@
+versión,cita,cifra,trayectoria,recall@5,coste medio (¢),latencia media (s),llamadas/pregunta,aciertos extractiva,aciertos numerica,aciertos comparativa
+jchulvi-v3,1.0,1.0,1.0,1.0,0.06286655999999999,13.757626124999979,3.2,3/3,3/3,4/4

@@ -16,7 +16,7 @@ from pydantic import (
     model_validator,
 )
 
-from .contracts import FamiliaPregunta, NombreHerramienta
+from .contracts import FamiliaPregunta, FuenteRespuesta, NombreHerramienta
 from .corpus import CorpusVariant
 
 
@@ -44,6 +44,8 @@ class CasoGolden(BaseModel):
     chunk_id_esperado: str | None = None
     herramienta_esperada: tuple[NombreHerramienta, ...] = Field(min_length=1)
     autor: str = Field(min_length=1)
+    respuesta_en_corpus: bool | None = None
+    fuente_esperada: FuenteRespuesta | None = None
 
     @field_validator("id", "pregunta", "respuesta_esperada", "autor")
     @classmethod

@@ -1,0 +1,11 @@
+id,familia,ticker,acierto,latencia_s,coste_usd,llamadas,cita,cifra,trayectoria,recall,error
+ho-001,extractiva,NVDA,True,15.184320791999996,0.00096885,2,True,,True,1.0,
+ho-002,extractiva,GOOGL,True,20.243389584000056,0.00040461,2,True,,True,1.0,
+ho-003,extractiva,AAPL,True,14.286611707999782,0.00055016,2,True,,True,1.0,
+ho-004,numerica,MSFT,True,5.750128790999952,0.00022529,2,,True,True,,
+ho-005,numerica,AMZN,True,12.243943416999855,0.000275796,2,,True,True,,
+ho-006,numerica,NVDA,True,8.444885958999976,0.00025448,2,,True,True,,
+ho-007,comparativa,AAPL,True,17.06221937500004,0.000686908,6,True,True,True,1.0,
+ho-008,comparativa,GOOGL,True,14.226319417000013,0.001118352,5,True,True,True,1.0,
+ho-009,comparativa,NVDA,True,15.666621791000125,0.0010126100000000002,5,True,True,True,1.0,
+ho-010,comparativa,MSFT,True,14.467820415999995,0.0007896,4,True,True,True,1.0,
